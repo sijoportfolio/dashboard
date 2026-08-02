@@ -425,7 +425,11 @@ function renderTickerCards(){
     const totDir = h.total_gain_pct===null ? 'flat' : h.total_gain_pct>0 ? 'up' : h.total_gain_pct<0 ? 'down' : 'flat';
     const totStr = h.total_gain_pct===null ? '-' : (h.total_gain_pct>0?'+':'') + h.total_gain_pct.toFixed(1) + '%';
     const stale = h.price_stale_days !== null && h.price_stale_days > 10;
-    const localVal = h.currency !== 'USD' ? fmtMoney((h.quantity*h.latest_price)||0, h.currency) : null;
+    // Was: h.quantity*h.latest_price - wrong whenever latest_price is quoted in a
+    // different currency than h.currency (e.g. crypto bought via WIO-AED-01 but
+    // priced live in USD). market_value_trade_ccy is computed backend-side from
+    // market_value_base using the correct trade-currency FX rate.
+    const localVal = h.currency !== 'USD' ? fmtMoney(h.market_value_trade_ccy||0, h.currency) : null;
     const displayValue = h.market_value_estimated!==undefined ? h.market_value_estimated : h.market_value_base;
     return '<div class="card" id="tc-' + i + '"><div class="row" onclick="toggleCard(' + i + ')">' +
       '<div class="left-col"><div class="ticker-line"><span class="ticker">' + h.asset_id + '</span>' +
