@@ -165,6 +165,12 @@
   .closed-row{display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--border-soft);
     border-radius:9px;padding:9px 14px;margin-bottom:6px;font-size:10px;color:var(--text-dim);}
   .closed-row b{font-family:var(--mono);color:var(--text);}
+  .closed-filters{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;}
+  .closed-card{margin-bottom:6px;}
+  .closed-card .closed-row{margin-bottom:0;border-radius:9px 9px 0 0;}
+  .closed-card:not(.expanded) .closed-row{border-radius:9px;}
+  .closed-detail-panel{display:none;padding:8px 10px 4px;background:var(--surface-2);border:1px solid var(--border-soft);border-top:none;border-radius:0 0 9px 9px;}
+  .closed-card.expanded .closed-detail-panel{display:block;}
   .hint{font-size:10px;color:var(--text-faint);margin-top:18px;line-height:1.6;}
 </style>
 </head>
@@ -182,6 +188,7 @@
 <script>
 const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxXmRugzGUz47znt34cT4CR13ZtwOau8ZhFe8YO9KT3ittvuuWFWlh-4sHgZbnDlpqRTw/exec';
 let HOLDINGS = [], ACCOUNTS = [], TARGETS = [], TRANSACTIONS = [], filterChain = [], valuesHidden = false;
+let closedFilter = {ticker:'', from:'', to:''};
 function toggleValues(){ valuesHidden = !valuesHidden; renderAll(); }
 function maskable(str){ return valuesHidden ? '*****' : str; }
 function accountBroker(accountId){ const a = ACCOUNTS.find(x => x.account_id === accountId); return a ? a.broker : accountId; }
@@ -202,7 +209,15 @@ function fmtUsd(v){ if(v === null || v === undefined) return '-'; return '$' + v
 function renderGoalAndPace(){
   const target = activeTarget();
   const nonCash = HOLDINGS.filter(h => !String(h.asset_id).startsWith('CASH-') && h.quantity > 0);
+  const allNonCash = HOLDINGS.filter(h => !String(h.asset_id).startsWith('CASH-'));
   const knownValue = HOLDINGS.reduce((s,h) => s + (h.market_value_estimated!==undefined ? (h.market_value_estimated||0) : (h.market_value_base||0)), 0);
+  // Total gain = unrealized (open positions) + realized (open and closed) - closed
+  // positions carry quantity 0 but a nonzero realized_gain_base, so allNonCash (not
+  // nonCash) is used here to include them. Today's gain is naturally 0 for closed
+  // positions since day_gain_base is derived from quantity, so summing over
+  // allNonCash is safe for both.
+  const totalGainBase = allNonCash.reduce((s,h) => s + (h.unrealized_gain_base||0) + (h.realized_gain_base||0), 0);
+  const dayGainBase = allNonCash.reduce((s,h) => s + (h.day_gain_base||0), 0);
   const estimatedPositions = nonCash.filter(h => h.is_estimated);
   const goalAmount = target ? Number(target.goal_amount_usd) : null;
   const targetDate = target ? target.target_date : null;
@@ -221,7 +236,9 @@ function renderGoalAndPace(){
         '</svg><div class="ring-center"><div class="rc-eyebrow">PORTFOLIO</div><div class="rc-value">' + maskable(fmtUsd(knownValue)) + '</div>' +
         '<div class="rc-pct">' + (goalAmount ? pct.toFixed(1)+'% of '+maskable(fmtUsd(goalAmount)) : 'no active target') + '</div></div></div>' +
         '<div class="goal-detail"><div class="gd-row"><span class="k">Positions</span><span class="v">' + nonCash.length + '</span></div>' +
-        '<div class="gd-row"><span class="k">At cost (no live price)</span><span class="v ' + (estimatedPositions.length?'loss':'') + '">' + estimatedPositions.length + '</span></div></div>' +
+        '<div class="gd-row"><span class="k">At cost (no live price)</span><span class="v ' + (estimatedPositions.length?'loss':'') + '">' + estimatedPositions.length + '</span></div>' +
+        '<div class="gd-row"><span class="k">Total Gain</span><span class="change ' + (totalGainBase>=0?'up':'down') + '">' + (totalGainBase>=0?'+':'-') + maskable(fmtUsd(Math.abs(totalGainBase))) + '</span></div>' +
+        '<div class="gd-row"><span class="k">Today\'s Gain</span><span class="change ' + (dayGainBase>=0?'up':'down') + '">' + (dayGainBase>=0?'+':'-') + maskable(fmtUsd(Math.abs(dayGainBase))) + '</span></div></div>' +
       '</div>' +
       (target ?
         '<div class="eta-strip"><div class="eta-block"><div class="eta-eyebrow">TARGET DATE</div><div class="eta-value target">' + new Date(targetDate).getFullYear() + '</div></div>' +
@@ -259,16 +276,34 @@ function renderCapitalCard(){
 function renderTrajectoryChart(currentValue, target){
   if(!target){ document.getElementById('trajectory-section').innerHTML=''; return; }
   const goalAmount = Number(target.goal_amount_usd);
-  const monthly = Number(target.monthly_contribution_usd);
+  const plannedMonthly = Number(target.monthly_contribution_usd);
   const targetCagr = Number(target.target_cagr)/100;
-  const illustrativeCagr = 0.11;
-  function project(rate, months){
-    const r = rate/12; let v = currentValue; const series=[v];
-    for(let i=1;i<=months;i++){ v = v*(1+r)+monthly; series.push(v); if(v>=goalAmount) return {series:series, hitMonth:i}; }
+
+  // Real contribution pace: actual average monthly BUY volume since the target's
+  // effective_date, blended into the ETA projection instead of treating the
+  // trajectory and CONTRIBUTION PACE chart as two disconnected things. The return
+  // RATE still uses target_cagr for both lines - a real trailing return (XIRR) is
+  // CALCULATE_RETURNS, a separate not-yet-built piece (bucket D) - only the
+  // contribution side of the projection is upgraded here.
+  const startDate = new Date(target.effective_date);
+  const today = new Date();
+  const monthsElapsed = Math.max(1, (today-startDate)/(1000*60*60*24*30));
+  const actualContributed = TRANSACTIONS.filter(function(t){ return t.action==='BUY' && new Date(t.date) >= startDate && t.base_currency_amount; })
+    .reduce(function(s,t){ return s+Number(t.base_currency_amount); },0);
+  const actualMonthlyPace = monthsElapsed > 0 ? actualContributed/monthsElapsed : plannedMonthly;
+
+  function project(monthlyAmt, months){
+    const r = targetCagr/12; let v = currentValue; const series=[v];
+    for(let i=1;i<=months;i++){ v = v*(1+r)+monthlyAmt; series.push(v); if(v>=goalAmount) return {series:series, hitMonth:i}; }
     return {series:series, hitMonth:null};
   }
-  const goldProj = project(targetCagr, 240);
-  const blueProj = project(illustrativeCagr, 240);
+  function etaLabel(hitMonth){
+    if(hitMonth===null || hitMonth===undefined) return 'beyond 20yr window';
+    const d = new Date(); d.setMonth(d.getMonth()+hitMonth);
+    return d.toLocaleDateString(undefined, {month:'short', year:'numeric'});
+  }
+  const goldProj = project(plannedMonthly, 240);
+  const blueProj = project(actualMonthlyPace, 240);
   const monthsMax = Math.max(goldProj.hitMonth||240, blueProj.hitMonth||240);
   const W=560,H=158,pad=8,padBottom=22;
   const maxV = goalAmount*1.05;
@@ -276,12 +311,11 @@ function renderTrajectoryChart(currentValue, target){
   const toY = function(v){ return H-padBottom - (Math.min(v,maxV)/maxV)*(H-pad-padBottom); };
   const goldPath = goldProj.series.slice(0,(goldProj.hitMonth||monthsMax)+1).map(function(v,i){ return (i===0?'M':'L')+toX(i)+' '+toY(v); }).join(' ');
   const bluePath = blueProj.series.slice(0,(blueProj.hitMonth||monthsMax)+1).map(function(v,i){ return (i===0?'M':'L')+toX(i)+' '+toY(v); }).join(' ');
-  const today = new Date();
   const yearTicks = [];
   for(let yrs=0; yrs*12<=monthsMax; yrs+=2){ yearTicks.push({month:yrs*12, year: today.getFullYear()+yrs}); }
   document.getElementById('trajectory-section').innerHTML =
     '<div class="chart-card"><div class="chart-title">TRAJECTORY TO GOAL</div>' +
-    '<div class="chart-sub">Compounding curves from your real current value</div>' +
+    '<div class="chart-sub">Compounding curves from your real current value - contribution pace blended in from actual purchases</div>' +
     '<svg width="100%" height="158" viewBox="0 0 560 158" preserveAspectRatio="none">' +
     '<line x1="' + pad + '" y1="' + toY(goalAmount) + '" x2="' + (W-pad) + '" y2="' + toY(goalAmount) + '" stroke="#232129" stroke-width="1" stroke-dasharray="3 3"/>' +
     '<path d="' + goldPath + '" fill="none" stroke="#C9A227" stroke-width="2"/>' +
@@ -292,9 +326,9 @@ function renderTrajectoryChart(currentValue, target){
     yearTicks.map(function(t){ return '<line x1="' + toX(t.month) + '" y1="' + (H-padBottom) + '" x2="' + toX(t.month) + '" y2="' + (H-padBottom+4) + '" stroke="#7A7886" stroke-width="1"/>' +
       '<text x="' + toX(t.month) + '" y="' + (H-padBottom+14) + '" fill="#7A7886" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">' + String(t.year).slice(2) + '</text>'; }).join('') +
     '</svg><div class="chart-legend">' +
-    '<span><span class="chart-sw" style="background:#C9A227"></span>At target CAGR (' + (targetCagr*100).toFixed(0) + '%)</span>' +
-    '<span><span class="chart-sw" style="background:#4F8FE8"></span>Illustrative pace (' + (illustrativeCagr*100).toFixed(0) + '%) - needs real trailing XIRR</span>' +
-    '</div></div>';
+    '<span><span class="chart-sw" style="background:#C9A227"></span>Planned pace (' + fmtUsd(plannedMonthly) + '/mo) - ETA ' + etaLabel(goldProj.hitMonth) + '</span>' +
+    '<span><span class="chart-sw" style="background:#4F8FE8"></span>Actual pace (' + fmtUsd(Math.round(actualMonthlyPace)) + '/mo) - ETA ' + etaLabel(blueProj.hitMonth) + '</span>' +
+    '</div><p class="hint" style="margin-top:6px;">Both lines use the target CAGR (' + (targetCagr*100).toFixed(0) + '%) as the return rate - a real trailing return (XIRR) isn\'t computed yet.</p></div>';
 }
 
 function renderContributionChart(target){
@@ -387,7 +421,20 @@ function renderRegionRing(allData){
 function renderDonut(dim, title, allData){
   const r = computeRendered(dim, allData);
   const paths = r.rendered.map(function(s){ return '<path d="' + arcPath(40,40,32,20,s.startAngle,s.endAngle) + '" fill="' + resolveColor(s.color) + '" class="' + (s.isSelected?'selected':'') + ' ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'' + dim + '\',\'' + s.label + '\')"></path>'; }).join('');
-  const legend = r.rendered.map(function(s){ return '<div class="legend-row ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'' + dim + '\',\'' + s.label + '\')"><span class="legend-sw" style="background:' + resolveColor(s.color) + '"></span><span class="legend-label">' + s.label + '</span><span class="legend-val">' + Math.round(s.pct*100) + '%</span></div>'; }).join('');
+  // For the currency breakdown specifically, also show each slice's own-currency
+  // total (not just its USD-converted share) - lets AED/INR totals be compared
+  // directly against the actual brokerage platform, same reasoning as the
+  // per-ticker LTP/Total Invested fields.
+  const baseDataForLocal = dim==='currency' ? applyChainExcept(dim, allData) : null;
+  const legend = r.rendered.map(function(s){
+    let localStr = '';
+    if(dim==='currency' && s.label!=='USD'){
+      const localTotal = baseDataForLocal.filter(function(h){ return h.currency===s.label; })
+        .reduce(function(sum,h){ return sum+(h.market_value_trade_ccy||0); },0);
+      localStr = ' (' + maskable(fmtMoney(localTotal, s.label)) + ')';
+    }
+    return '<div class="legend-row ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'' + dim + '\',\'' + s.label + '\')"><span class="legend-sw" style="background:' + resolveColor(s.color) + '"></span><span class="legend-label">' + s.label + '</span><span class="legend-val">' + Math.round(s.pct*100) + '%' + localStr + '</span></div>';
+  }).join('');
   return '<div class="donut-card"><div class="donut-title">' + title + '</div><div class="donut-body"><div class="donut-center"><svg class="donut-svg" width="80" height="80" viewBox="0 0 80 80">' + paths + '</svg><div class="donut-center-label"><div class="v">' + maskable(fmtUsd(r.total)) + '</div><div class="k">' + (r.activeInThisDim?r.activeInThisDim.value:(filterChain.length?'Subset':'Total')) + '</div></div></div><div class="legend-list">' + legend + '</div></div></div>';
 }
 function onSliceClick(dim, value){
@@ -452,20 +499,85 @@ function renderTickerCards(){
       (stale?('<span class="stale-badge">' + h.price_stale_days + 'd stale</span>'):'') + '</div><span class="chevron">v</span></div>' +
       '<div class="panel"><div class="meta-line">Avg cost ' + h.avg_cost_per_unit.toFixed(4) + ' ' + h.currency + ' - Total invested ' + maskable(totalInvestedStr) + ' - Realized ' + fmtUsd(h.realized_gain_base) + ' - Fees paid ' + fmtUsd(h.total_fees_paid_base) +
       (h.is_estimated?'<br><span style="color:var(--orange)">* At cost - no live price has ever been fetched.</span>':'') + '</div>' +
+      (h.manual_override?(
       '<div class="price-edit-row" onclick="event.stopPropagation()">' +
       '<input type="number" step="any" placeholder="Set price (' + h.currency + ')" id="pe-' + i + '" class="price-edit-input">' +
       '<button class="refresh-btn" onclick="submitManualPrice(\'' + cardKey + '\', \'pe-' + i + '\')">Save price</button>' +
-      (h.manual_override?('<button class="refresh-btn" onclick="submitResumeAutoFetch(\'' + cardKey + '\')">Resume auto-fetch</button>'):'') +
-      '</div>' +
+      '<button class="refresh-btn" onclick="submitResumeAutoFetch(\'' + cardKey + '\')">Resume auto-fetch</button>' +
+      '</div>'
+      ):'') +
       '<div class="lot-row head"><span>Lot</span><span>Qty</span><span>Cost</span><span>Term</span><span style="text-align:right">G/L</span></div>' +
       (h.lots||[]).map(function(l){ return '<div class="lot-row"><span>' + l.lot_id + '<br><span style="color:var(--text-faint)">' + l.date + '</span></span><span>' + l.qty + '</span><span>' + l.cost_per_unit + '</span>' +
         '<span>' + (l.term?('<span class="lot-term ' + l.term.toLowerCase() + '">' + l.term + '</span>'):'-') + '</span>' +
         '<span class="lot-gl ' + (l.unrealized_gain_base>=0?'up':'down') + '">' + (l.harvest_candidate?'[H] ':'') + (l.unrealized_gain_base!==null?fmtUsd(l.unrealized_gain_base):'-') + '</span></div>'; }).join('') +
       '</div></div>';
   }).join('');
-  const closedHtml = closed.length ? closed.map(function(h){ return '<div class="closed-row"><span>' + h.asset_id + ' - ' + (h.asset_name||'') + ' (' + h.account_id + ')</span><b>Realized: ' + fmtUsd(h.realized_gain_base) + '</b></div>'; }).join('') : '<p class="hint">No fully closed positions.</p>';
+  const closedTotalAll = closed.reduce(function(s,h){ return s+(h.realized_gain_base||0); },0);
+
+  // Each closed position's own transaction history, from the globally-loaded
+  // TRANSACTIONS (now includes asset_id/account_id/quantity/price/trade_currency
+  // per the WebApp.gs expansion) - "closedDate" is approximated as the latest
+  // transaction date touching that position, since CalcEngine doesn't return a
+  // separate close-date field.
+  function txnsFor(h){
+    return TRANSACTIONS.filter(function(t){ return t.asset_id===h.asset_id && t.account_id===h.account_id; })
+      .slice().sort(function(a,b){ return new Date(b.date)-new Date(a.date); });
+  }
+  function closedDateFor(h){
+    const txns = txnsFor(h);
+    return txns.length ? new Date(txns[0].date) : null;
+  }
+  const fromDate = closedFilter.from ? new Date(closedFilter.from) : null;
+  const toDate = closedFilter.to ? new Date(closedFilter.to) : null;
+  const tickerNeedle = closedFilter.ticker.trim().toUpperCase();
+  const closedFilteredList = closed.filter(function(h){
+    if(tickerNeedle && h.asset_id.toUpperCase().indexOf(tickerNeedle) === -1) return false;
+    const cd = closedDateFor(h);
+    if(fromDate && cd && cd < fromDate) return false;
+    if(toDate && cd && cd > toDate) return false;
+    return true;
+  });
+  const closedTotal = closedFilteredList.reduce(function(s,h){ return s+(h.realized_gain_base||0); },0);
+  const filtersActive = !!(closedFilter.ticker || closedFilter.from || closedFilter.to);
+
+  const closedFilterHtml = closed.length ? (
+    '<div class="closed-filters">' +
+    '<input type="text" placeholder="Filter ticker..." value="' + closedFilter.ticker.replace(/"/g,'') + '" oninput="setClosedFilter(\'ticker\', this.value)" class="price-edit-input">' +
+    '<input type="date" value="' + closedFilter.from + '" onchange="setClosedFilter(\'from\', this.value)" class="price-edit-input">' +
+    '<span class="hint" style="align-self:center;">to</span>' +
+    '<input type="date" value="' + closedFilter.to + '" onchange="setClosedFilter(\'to\', this.value)" class="price-edit-input">' +
+    (filtersActive ? '<button class="refresh-btn" onclick="clearClosedFilter()">Clear</button>' : '') +
+    '</div>'
+  ) : '';
+
+  const closedHtml = closedFilteredList.length ? closedFilteredList.map(function(h, ci){
+    const localRealized = (h.currency!=='USD' && h.realized_gain_trade_ccy!==null && h.realized_gain_trade_ccy!==undefined)
+      ? ' (' + maskable(fmtMoney(h.realized_gain_trade_ccy, h.currency)) + ')' : '';
+    const txns = txnsFor(h);
+    const txnRows = txns.map(function(t){
+      return '<div class="lot-row"><span>' + t.date + '</span><span>' + t.action + '</span>' +
+        '<span>' + (t.quantity!==undefined&&t.quantity!==null?t.quantity:'-') + '</span>' +
+        '<span>' + (t.price!==undefined&&t.price!==null?fmtMoney(Number(t.price), t.trade_currency):'-') + '</span>' +
+        '<span style="text-align:right">' + (t.base_currency_amount!==undefined&&t.base_currency_amount!==null?fmtUsd(Number(t.base_currency_amount)):'-') + '</span></div>';
+    }).join('');
+    return '<div class="closed-card" id="cc-' + ci + '">' +
+      '<div class="closed-row" onclick="toggleClosedCard(' + ci + ')" style="cursor:pointer;">' +
+      '<span>' + h.asset_id + ' - ' + (h.asset_name||'') + ' (' + h.account_id + ')</span>' +
+      '<b>Realized: ' + fmtUsd(h.realized_gain_base) + localRealized + '</b></div>' +
+      '<div class="closed-detail-panel"><div class="lot-row head"><span>Date</span><span>Action</span><span>Qty</span><span>Price</span><span style="text-align:right">Base amt</span></div>' +
+      (txnRows || '<p class="hint">No transaction history found for this position.</p>') + '</div></div>';
+  }).join('') : '<p class="hint">No closed positions match the current filter.</p>';
+  const closedTotalHtml = closed.length ? '<div class="closed-row" style="border-color:var(--border);"><span style="font-weight:600;">Total realized P/L - ' + closedFilteredList.length + ' of ' + closed.length + ' closed position(s)</span><b class="change ' + (closedTotal>=0?'up':'down') + '">' + (closedTotal>=0?'+':'-') + maskable(fmtUsd(Math.abs(closedTotal))) + '</b></div>' : '';
   document.getElementById('cards-section').innerHTML = cardsHtml || '<p class="hint">No positions match the current filter.</p>';
-  document.getElementById('closed-section').innerHTML = '<p class="section-title">CLOSED POSITIONS (still counted in realized returns)</p>' + closedHtml;
+  document.getElementById('closed-section').innerHTML = '<p class="section-title">CLOSED POSITIONS (still counted in realized returns)</p>' + closedFilterHtml + closedTotalHtml + closedHtml;
+}
+function setClosedFilter(key, value){ closedFilter[key] = value; renderTickerCards(); }
+function clearClosedFilter(){ closedFilter = {ticker:'', from:'', to:''}; renderTickerCards(); }
+function toggleClosedCard(i){
+  const card=document.getElementById('cc-'+i);
+  const was=card.classList.contains('expanded');
+  document.querySelectorAll('.closed-card').forEach(function(c){ c.classList.remove('expanded'); });
+  if(!was) card.classList.add('expanded');
 }
 function toggleCard(i){
   const card=document.getElementById('tc-'+i);
