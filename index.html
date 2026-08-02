@@ -171,6 +171,9 @@
   .closed-card:not(.expanded) .closed-row{border-radius:9px;}
   .closed-detail-panel{display:none;padding:8px 10px 4px;background:var(--surface-2);border:1px solid var(--border-soft);border-top:none;border-radius:0 0 9px 9px;}
   .closed-card.expanded .closed-detail-panel{display:block;}
+  .closed-section-card{margin-top:8px;}
+  .closed-section-body{display:none;padding-top:10px;}
+  .closed-section-card.expanded .closed-section-body{display:block;}
   .hint{font-size:10px;color:var(--text-faint);margin-top:18px;line-height:1.6;}
 </style>
 </head>
@@ -446,15 +449,23 @@ function onSliceClick(dim, value){
 function removeCrumb(i){ filterChain.splice(i,1); renderAll(); }
 function clearFilter(){ filterChain=[]; renderAll(); }
 function renderFiltersAndRings(){
-  const allData = HOLDINGS.filter(function(h){ return !String(h.asset_id).startsWith('CASH-') && h.quantity > 0; });
-  document.getElementById('region-ring-section').innerHTML = renderRegionRing(allData);
+  // Invested-only set (excludes cash) - used for region/classification/market cap,
+  // where cash doesn't have a meaningful value (no classification, no market cap).
+  const investedData = HOLDINGS.filter(function(h){ return !String(h.asset_id).startsWith('CASH-') && h.quantity > 0; });
+  // Currency and broker exposure both legitimately include cash sitting in that
+  // currency/account - excluding it there made these donuts' totals silently
+  // smaller than the main ring's total (which does include cash), looking like an
+  // unexplained discrepancy. Cash rows always have quantity = balance (can be 0 or
+  // negative), so filter on asset_id shape instead of quantity>0 for this set.
+  const withCashData = HOLDINGS.filter(function(h){ return String(h.asset_id).startsWith('CASH-') || h.quantity > 0; });
+  document.getElementById('region-ring-section').innerHTML = renderRegionRing(investedData);
   document.getElementById('donut-grid').innerHTML =
-    renderDonut('currency','BY CURRENCY', allData) + renderDonut('classification','BY CLASSIFICATION', allData) +
-    renderDonut('cap','BY MARKET CAP', allData) + renderDonut('broker','BY BROKER', allData);
+    renderDonut('currency','BY CURRENCY (incl. cash)', withCashData) + renderDonut('classification','BY CLASSIFICATION', investedData) +
+    renderDonut('cap','BY MARKET CAP', investedData) + renderDonut('broker','BY BROKER (incl. cash)', withCashData);
   document.getElementById('breadcrumb').innerHTML = filterChain.map(function(f,i){ return (i>0?'<span class="crumb-arrow">-></span>':'') + '<span class="crumb">' + f.value + '<button onclick="removeCrumb(' + i + ')">x</button></span>'; }).join('');
   const bar=document.getElementById('filter-bar'), text=document.getElementById('filter-text'), btn=document.getElementById('filter-clear-btn');
   if(filterChain.length){
-    const subset = fullyFiltered(allData);
+    const subset = fullyFiltered(investedData);
     bar.classList.add('active'); text.classList.remove('filter-empty');
     text.textContent = 'Filtered: ' + maskable(fmtUsd(subset.reduce(function(s,h){ return s+(h.market_value_estimated||h.market_value_base||0); },0))) + ' - ' + subset.length + ' position(s)';
     btn.style.display='inline-block';
@@ -569,7 +580,21 @@ function renderTickerCards(){
   }).join('') : '<p class="hint">No closed positions match the current filter.</p>';
   const closedTotalHtml = closed.length ? '<div class="closed-row" style="border-color:var(--border);"><span style="font-weight:600;">Total realized P/L - ' + closedFilteredList.length + ' of ' + closed.length + ' closed position(s)</span><b class="change ' + (closedTotal>=0?'up':'down') + '">' + (closedTotal>=0?'+':'-') + maskable(fmtUsd(Math.abs(closedTotal))) + '</b></div>' : '';
   document.getElementById('cards-section').innerHTML = cardsHtml || '<p class="hint">No positions match the current filter.</p>';
-  document.getElementById('closed-section').innerHTML = '<p class="section-title">CLOSED POSITIONS (still counted in realized returns)</p>' + closedFilterHtml + closedTotalHtml + closedHtml;
+  // Collapsed by default - only "TOTAL SOLD POSITIONS" + aggregate P/L show until
+  // clicked; the filter bar and full list render inside the (hidden until
+  // expanded) detail panel, matching the same .expanded pattern as ticker cards.
+  const closedSummaryTotal = closedTotalAll;
+  document.getElementById('closed-section').innerHTML =
+    '<div class="closed-section-card" id="closed-toggle">' +
+    '<div class="closed-row" onclick="toggleClosedSection()" style="cursor:pointer;border-color:var(--border);">' +
+    '<span style="font-weight:600;">TOTAL SOLD POSITIONS (' + closed.length + ')</span>' +
+    '<b class="change ' + (closedSummaryTotal>=0?'up':'down') + '">' + (closedSummaryTotal>=0?'+':'-') + maskable(fmtUsd(Math.abs(closedSummaryTotal))) + '</b></div>' +
+    '<div class="closed-section-body">' + closedFilterHtml + closedTotalHtml + closedHtml + '</div>' +
+    '</div>';
+}
+function toggleClosedSection(){
+  const el = document.getElementById('closed-toggle');
+  if(el) el.classList.toggle('expanded');
 }
 function setClosedFilter(key, value){ closedFilter[key] = value; renderTickerCards(); }
 function clearClosedFilter(){ closedFilter = {ticker:'', from:'', to:''}; renderTickerCards(); }
