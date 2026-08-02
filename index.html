@@ -136,6 +136,9 @@
   .mkt-value{font-family:var(--mono);font-size:13px;font-weight:600;}
   .mkt-value.estimated{color:var(--orange);}
   .local-value{font-family:var(--mono);font-size:9px;color:var(--text-faint);}
+  .price-edit-row{display:flex;gap:8px;align-items:center;margin:10px 0 12px;flex-wrap:wrap;}
+  .price-edit-input{font-family:var(--mono);font-size:10px;background:var(--surface);color:var(--text);
+    border:1px solid var(--border);border-radius:6px;padding:6px 8px;width:130px;}
   .gain-lines{display:flex;flex-direction:column;align-items:flex-end;gap:1px;margin-top:2px;}
   .gain-line{display:flex;align-items:center;gap:4px;font-size:9px;}
   .gain-lbl{color:var(--text-faint);font-size:7.5px;}
@@ -425,24 +428,35 @@ function renderTickerCards(){
     const totDir = h.total_gain_pct===null ? 'flat' : h.total_gain_pct>0 ? 'up' : h.total_gain_pct<0 ? 'down' : 'flat';
     const totStr = h.total_gain_pct===null ? '-' : (h.total_gain_pct>0?'+':'') + h.total_gain_pct.toFixed(1) + '%';
     const stale = h.price_stale_days !== null && h.price_stale_days > 10;
-    // Was: h.quantity*h.latest_price - wrong whenever latest_price is quoted in a
-    // different currency than h.currency (e.g. crypto bought via WIO-AED-01 but
-    // priced live in USD). market_value_trade_ccy is computed backend-side from
-    // market_value_base using the correct trade-currency FX rate.
+    // LTP and Total invested are shown in the BUY currency (h.currency), never
+    // market_value_base's USD, so they line up with what the brokerage platform
+    // itself shows - h.latest_price_trade_ccy/h.cost_basis_trade_ccy handle the
+    // conversion server-side, same fields the AED-value fix relies on.
+    const ltpStr = h.latest_price_trade_ccy!==null && h.latest_price_trade_ccy!==undefined
+      ? fmtMoney(h.latest_price_trade_ccy, h.currency) : '-';
+    const totalInvestedStr = h.cost_basis_trade_ccy!==null && h.cost_basis_trade_ccy!==undefined
+      ? fmtMoney(h.cost_basis_trade_ccy, h.currency) : '-';
     const localVal = h.currency !== 'USD' ? fmtMoney(h.market_value_trade_ccy||0, h.currency) : null;
     const displayValue = h.market_value_estimated!==undefined ? h.market_value_estimated : h.market_value_base;
+    const cardKey = h.account_id + '__' + h.asset_id;
     return '<div class="card" id="tc-' + i + '"><div class="row" onclick="toggleCard(' + i + ')">' +
       '<div class="left-col"><div class="ticker-line"><span class="ticker">' + h.asset_id + '</span>' +
       '<span class="qty">x' + Number(h.quantity).toLocaleString(undefined,{maximumFractionDigits:4}) + '</span>' +
       '<span class="quality-num ' + qClass(h.conviction) + '">' + (h.conviction!==''&&h.conviction!==null? Number(h.conviction).toFixed(1) : '-') + '</span></div>' +
-      '<span class="name">' + (h.asset_name||'') + ' - ' + h.account_id + '</span></div>' +
+      '<span class="name">' + (h.asset_name||'') + ' - ' + h.account_id + '</span>' +
+      '<span class="local-value">LTP ' + maskable(ltpStr) + '</span></div>' +
       '<div class="right-col"><span class="mkt-value ' + (h.is_estimated?'estimated':'') + '">' + maskable(displayValue!==null?fmtUsd(displayValue):'-') + (h.is_estimated?' *':'') + '</span>' +
       (localVal?('<span class="local-value">' + maskable(localVal) + '</span>'):'') +
       '<div class="gain-lines"><div class="gain-line"><span class="gain-lbl">24H</span><span class="change ' + dayDir + '">' + dayStr + '</span></div>' +
       '<div class="gain-line"><span class="gain-lbl">ALL-TIME</span><span class="change ' + totDir + '">' + totStr + '</span></div></div>' +
       (stale?('<span class="stale-badge">' + h.price_stale_days + 'd stale</span>'):'') + '</div><span class="chevron">v</span></div>' +
-      '<div class="panel"><div class="meta-line">Avg cost ' + h.avg_cost_per_unit.toFixed(4) + ' ' + h.currency + ' - Realized ' + fmtUsd(h.realized_gain_base) + ' - Fees paid ' + fmtUsd(h.total_fees_paid_base) +
+      '<div class="panel"><div class="meta-line">Avg cost ' + h.avg_cost_per_unit.toFixed(4) + ' ' + h.currency + ' - Total invested ' + maskable(totalInvestedStr) + ' - Realized ' + fmtUsd(h.realized_gain_base) + ' - Fees paid ' + fmtUsd(h.total_fees_paid_base) +
       (h.is_estimated?'<br><span style="color:var(--orange)">* At cost - no live price has ever been fetched.</span>':'') + '</div>' +
+      '<div class="price-edit-row" onclick="event.stopPropagation()">' +
+      '<input type="number" step="any" placeholder="Set price (' + h.currency + ')" id="pe-' + i + '" class="price-edit-input">' +
+      '<button class="refresh-btn" onclick="submitManualPrice(\'' + cardKey + '\', \'pe-' + i + '\')">Save price</button>' +
+      (h.manual_override?('<button class="refresh-btn" onclick="submitResumeAutoFetch(\'' + cardKey + '\')">Resume auto-fetch</button>'):'') +
+      '</div>' +
       '<div class="lot-row head"><span>Lot</span><span>Qty</span><span>Cost</span><span>Term</span><span style="text-align:right">G/L</span></div>' +
       (h.lots||[]).map(function(l){ return '<div class="lot-row"><span>' + l.lot_id + '<br><span style="color:var(--text-faint)">' + l.date + '</span></span><span>' + l.qty + '</span><span>' + l.cost_per_unit + '</span>' +
         '<span>' + (l.term?('<span class="lot-term ' + l.term.toLowerCase() + '">' + l.term + '</span>'):'-') + '</span>' +
@@ -473,12 +487,38 @@ function buildAppShell(){
 }
 function attachLots(lots){ HOLDINGS.forEach(function(h){ h.lots = lots.filter(function(l){ return l.account_id===h.account_id && l.asset_id===h.asset_id; }); }); }
 function freshFetch(url){ return fetch(url + (url.indexOf('?')>=0 ? '&' : '?') + '_ts=' + Date.now(), { cache: 'no-store' }); }
-async function loadData(action){
-  const res = await freshFetch(WEB_APP_URL + '?action=' + action);
+async function loadData(action, extraParams){
+  let url = WEB_APP_URL + '?action=' + action;
+  if (extraParams) Object.keys(extraParams).forEach(function(k){ url += '&' + k + '=' + encodeURIComponent(extraParams[k]); });
+  const res = await freshFetch(url);
   if(!res.ok) throw new Error('HTTP ' + res.status + ' on action=' + action);
   const json = await res.json();
   if(json.error) throw new Error(json.error);
   return json;
+}
+function parseCardKey(cardKey){ const parts = cardKey.split('__'); return { account_id: parts[0], asset_id: parts[1] }; }
+async function submitManualPrice(cardKey, inputId){
+  const input = document.getElementById(inputId);
+  const price = Number(input.value);
+  if(!input.value || isNaN(price)){ input.focus(); return; }
+  const { asset_id } = parseCardKey(cardKey);
+  input.disabled = true;
+  try{
+    await loadData('set_manual_price', { asset_id: asset_id, price: price });
+    await fullLoad(false);
+  } catch(err){
+    alert('Could not save manual price: ' + err.message);
+    input.disabled = false;
+  }
+}
+async function submitResumeAutoFetch(cardKey){
+  const { asset_id } = parseCardKey(cardKey);
+  try{
+    await loadData('resume_auto_fetch', { asset_id: asset_id });
+    await fullLoad(false);
+  } catch(err){
+    alert('Could not resume auto-fetch: ' + err.message);
+  }
 }
 async function fullLoad(triggerRefresh){
   const holdingsAction = triggerRefresh ? 'refresh' : 'holdings';
