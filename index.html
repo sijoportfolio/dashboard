@@ -501,7 +501,7 @@ function renderTickerCards(){
       (h.is_estimated?'<br><span style="color:var(--orange)">* At cost - no live price has ever been fetched.</span>':'') + '</div>' +
       (h.manual_override?(
       '<div class="price-edit-row" onclick="event.stopPropagation()">' +
-      '<input type="number" step="any" placeholder="Set price (' + h.currency + ')" id="pe-' + i + '" class="price-edit-input">' +
+      '<input type="number" step="any" placeholder="Set price (' + h.currency + ')" id="pe-' + i + '" name="pe-' + i + '" class="price-edit-input">' +
       '<button class="refresh-btn" onclick="submitManualPrice(\'' + cardKey + '\', \'pe-' + i + '\')">Save price</button>' +
       '<button class="refresh-btn" onclick="submitResumeAutoFetch(\'' + cardKey + '\')">Resume auto-fetch</button>' +
       '</div>'
@@ -542,10 +542,10 @@ function renderTickerCards(){
 
   const closedFilterHtml = closed.length ? (
     '<div class="closed-filters">' +
-    '<input type="text" placeholder="Filter ticker..." value="' + closedFilter.ticker.replace(/"/g,'') + '" oninput="setClosedFilter(\'ticker\', this.value)" class="price-edit-input">' +
-    '<input type="date" value="' + closedFilter.from + '" onchange="setClosedFilter(\'from\', this.value)" class="price-edit-input">' +
+    '<input type="text" name="closed-filter-ticker" id="closed-filter-ticker" placeholder="Filter ticker..." value="' + closedFilter.ticker.replace(/"/g,'') + '" oninput="setClosedFilter(\'ticker\', this.value)" class="price-edit-input">' +
+    '<input type="date" name="closed-filter-from" id="closed-filter-from" value="' + closedFilter.from + '" onchange="setClosedFilter(\'from\', this.value)" class="price-edit-input">' +
     '<span class="hint" style="align-self:center;">to</span>' +
-    '<input type="date" value="' + closedFilter.to + '" onchange="setClosedFilter(\'to\', this.value)" class="price-edit-input">' +
+    '<input type="date" name="closed-filter-to" id="closed-filter-to" value="' + closedFilter.to + '" onchange="setClosedFilter(\'to\', this.value)" class="price-edit-input">' +
     (filtersActive ? '<button class="refresh-btn" onclick="clearClosedFilter()">Clear</button>' : '') +
     '</div>'
   ) : '';
@@ -598,15 +598,28 @@ function buildAppShell(){
     '<p class="hint">Live from your Sheet. Auto-refreshes every 5 min. Refresh button triggers a real price fetch (up to a minute).</p>';
 }
 function attachLots(lots){ HOLDINGS.forEach(function(h){ h.lots = lots.filter(function(l){ return l.account_id===h.account_id && l.asset_id===h.asset_id; }); }); }
+function sleep(ms){ return new Promise(function(resolve){ setTimeout(resolve, ms); }); }
 function freshFetch(url){ return fetch(url + (url.indexOf('?')>=0 ? '&' : '?') + '_ts=' + Date.now(), { cache: 'no-store' }); }
 async function loadData(action, extraParams){
   let url = WEB_APP_URL + '?action=' + action;
   if (extraParams) Object.keys(extraParams).forEach(function(k){ url += '&' + k + '=' + encodeURIComponent(extraParams[k]); });
-  const res = await freshFetch(url);
-  if(!res.ok) throw new Error('HTTP ' + res.status + ' on action=' + action);
-  const json = await res.json();
-  if(json.error) throw new Error(json.error);
-  return json;
+  // Apps Script Web Apps occasionally return a transient failure (404/5xx) that
+  // succeeds a moment later - one retry after a short delay before giving up and
+  // showing the error screen, rather than treating every blip as a hard failure.
+  let lastErr;
+  for(let attempt=1; attempt<=2; attempt++){
+    try{
+      const res = await freshFetch(url);
+      if(!res.ok) throw new Error('HTTP ' + res.status + ' on action=' + action);
+      const json = await res.json();
+      if(json.error) throw new Error(json.error);
+      return json;
+    } catch(err){
+      lastErr = err;
+      if(attempt===1) await sleep(2000);
+    }
+  }
+  throw lastErr;
 }
 function parseCardKey(cardKey){ const parts = cardKey.split('__'); return { account_id: parts[0], asset_id: parts[1] }; }
 async function submitManualPrice(cardKey, inputId){
@@ -632,7 +645,10 @@ async function submitResumeAutoFetch(cardKey){
     alert('Could not resume auto-fetch: ' + err.message);
   }
 }
+let loadInProgress = false;
 async function fullLoad(triggerRefresh){
+  if(loadInProgress) return; // avoid overlapping calls (auto-poll vs. manual click) piling up executions
+  loadInProgress = true;
   const holdingsAction = triggerRefresh ? 'refresh' : 'holdings';
   const asofEl = document.getElementById('asof-line');
   const btn = document.getElementById('refresh-btn');
@@ -653,6 +669,7 @@ async function fullLoad(triggerRefresh){
     console.error(err);
   } finally {
     if(btn){ btn.disabled = false; btn.textContent = 'Refresh prices'; }
+    loadInProgress = false;
   }
 }
 setInterval(function(){ fullLoad(false); }, 5*60*1000);
