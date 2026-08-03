@@ -191,7 +191,13 @@
 <script>
 const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxXmRugzGUz47znt34cT4CR13ZtwOau8ZhFe8YO9KT3ittvuuWFWlh-4sHgZbnDlpqRTw/exec';
 let HOLDINGS = [], ACCOUNTS = [], TARGETS = [], TRANSACTIONS = [], filterChain = [], valuesHidden = false;
-let closedFilter = {ticker:'', from:'', to:''};
+function isoDateStr(d){ return d.toISOString().slice(0,10); }
+function defaultClosedFilter(){
+  const today = new Date();
+  const monthAgo = new Date(today); monthAgo.setMonth(monthAgo.getMonth()-1);
+  return {ticker:'', from: isoDateStr(monthAgo), to: isoDateStr(today)};
+}
+let closedFilter = defaultClosedFilter();
 function toggleValues(){ valuesHidden = !valuesHidden; renderAll(); }
 function maskable(str){ return valuesHidden ? '*****' : str; }
 function accountBroker(accountId){ const a = ACCOUNTS.find(x => x.account_id === accountId); return a ? a.broker : accountId; }
@@ -202,10 +208,25 @@ function activeTarget(){
   sorted.forEach(t => { if(new Date(t.effective_date) <= today) active = t; });
   return active;
 }
+function indianGroup(intDigits){
+  if(intDigits.length <= 3) return intDigits;
+  const lastThree = intDigits.slice(-3);
+  const rest = intDigits.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ',');
+  return rest + ',' + lastThree;
+}
+function fmtIndian(v, maxFrac){
+  const neg = v < 0;
+  const fixed = Math.abs(v).toFixed(maxFrac===undefined?2:maxFrac);
+  const parts = fixed.split('.');
+  return (neg?'-':'') + indianGroup(parts[0]) + (parts[1] && Number(parts[1])>0 ? '.' + parts[1] : '');
+}
 function fmtMoney(v, ccy){
   if(v === null || v === undefined) return '-';
   const sym = ccy === 'INR' ? 'Rs ' : ccy === 'AED' ? 'AED ' : ccy === 'USD' ? '$' : '';
-  return sym + Math.abs(v).toLocaleString(undefined, {maximumFractionDigits:2}) + (v<0?' (neg)':'');
+  // INR uses the Indian numbering system (lakh/crore - last 3 digits, then groups
+  // of 2, e.g. 12,34,567) rather than the Western 3-digit grouping.
+  const numStr = ccy === 'INR' ? fmtIndian(v, 2) : Math.abs(v).toLocaleString(undefined, {maximumFractionDigits:2});
+  return sym + numStr + (v<0 && ccy!=='INR' ? ' (neg)':'');
 }
 function fmtUsd(v){ if(v === null || v === undefined) return '-'; return '$' + v.toLocaleString(undefined, {maximumFractionDigits:0}); }
 
@@ -251,11 +272,31 @@ function renderGoalAndPace(){
       (estimatedPositions.length ? '<p class="hint" style="margin-top:10px;">At-cost positions (' + estimatedPositions.map(function(p){return p.asset_id;}).join(', ') + ') use purchase price, not a live value.</p>' : '') +
     '</div>';
 
+  // Milestones are at real 12.5/25/50/100% of goal - visually those bunch together
+  // (12.5->25 is a 12.5-wide gap, 50->100 is a 50-wide gap) since raw % literally
+  // sets track position. Map real % to an EQUALLY-SPACED visual position instead
+  // (0/12.5/25/50/100 -> 0/25/50/75/100), piecewise-linear within each segment, so
+  // the posts sit evenly apart while their labels keep showing the true percentage.
+  // The fill bar and runner marker use the same mapping so they stay visually
+  // aligned with the posts along the same (nonlinear) track scale.
+  function milestoneVisualPct(realPct){
+    const stops = [{r:0,v:0},{r:12.5,v:25},{r:25,v:50},{r:50,v:75},{r:100,v:100}];
+    const clamped = Math.max(0, Math.min(100, realPct));
+    for(let i=0;i<stops.length-1;i++){
+      const a=stops[i], b=stops[i+1];
+      if(clamped>=a.r && clamped<=b.r){
+        const frac = (b.r===a.r) ? 0 : (clamped-a.r)/(b.r-a.r);
+        return a.v + frac*(b.v-a.v);
+      }
+    }
+    return 100;
+  }
+  const visualPct = milestoneVisualPct(pct);
   document.getElementById('pace-section').innerHTML =
-    '<div class="pace-card"><div class="pace-title">PROGRESS TO GOAL - milestones at 12.5/25/50/100% of goal_amount_usd</div>' +
-    '<div class="track-wrap"><div class="track"><div class="track-fill" style="width:' + Math.min(pct,100) + '%"></div></div>' +
-    milestonePcts.map(function(m){ return '<div class="milestone ' + (pct>=m?'passed':'') + '" style="left:' + m + '%"></div><div class="milestone-label" style="left:' + m + '%">' + m + '%</div>'; }).join('') +
-    '<div class="runner-marker" style="left:' + Math.min(pct,100) + '%"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/></svg></div>' +
+    '<div class="pace-card"><div class="pace-title">PROGRESS TO GOAL - milestones at 12.5/25/50/100% of goal_amount_usd, evenly spaced for readability</div>' +
+    '<div class="track-wrap"><div class="track"><div class="track-fill" style="width:' + visualPct + '%"></div></div>' +
+    milestonePcts.map(function(m){ return '<div class="milestone ' + (pct>=m?'passed':'') + '" style="left:' + milestoneVisualPct(m) + '%"></div><div class="milestone-label" style="left:' + milestoneVisualPct(m) + '%">' + m + '%</div>'; }).join('') +
+    '<div class="runner-marker" style="left:' + visualPct + '%"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/></svg></div>' +
     '</div></div>';
 
   renderCapitalCard();
@@ -282,18 +323,25 @@ function renderTrajectoryChart(currentValue, target){
   const plannedMonthly = Number(target.monthly_contribution_usd);
   const targetCagr = Number(target.target_cagr)/100;
 
-  // Real contribution pace: actual average monthly BUY volume since the target's
-  // effective_date, blended into the ETA projection instead of treating the
-  // trajectory and CONTRIBUTION PACE chart as two disconnected things. The return
-  // RATE still uses target_cagr for both lines - a real trailing return (XIRR) is
-  // CALCULATE_RETURNS, a separate not-yet-built piece (bucket D) - only the
-  // contribution side of the projection is upgraded here.
+  // Real contribution pace, blended into the ETA projection instead of treating the
+  // trajectory and CONTRIBUTION PACE chart as two disconnected things. Uses a
+  // TRAILING window (last 6 months, or the full history if the target is younger
+  // than that) rather than averaging since the target's effective_date - the plan
+  // stepped up from $2,000/mo to $3,000/mo, so a since-inception average would
+  // dilute the current, more realistic pace with years of the older lower amount.
+  // The return RATE still uses target_cagr for both lines - a real trailing return
+  // (XIRR) is CALCULATE_RETURNS, a separate not-yet-built piece (bucket D) - only
+  // the contribution side of the projection is upgraded here.
   const startDate = new Date(target.effective_date);
   const today = new Date();
-  const monthsElapsed = Math.max(1, (today-startDate)/(1000*60*60*24*30));
-  const actualContributed = TRANSACTIONS.filter(function(t){ return t.action==='BUY' && new Date(t.date) >= startDate && t.base_currency_amount; })
+  const paceWindowMonths = 6;
+  const paceWindowStart = new Date(today); paceWindowStart.setMonth(paceWindowStart.getMonth()-paceWindowMonths);
+  const effectivePaceStart = paceWindowStart > startDate ? paceWindowStart : startDate;
+  const paceMonthsElapsed = Math.max(1, (today-effectivePaceStart)/(1000*60*60*24*30));
+  const recentContributed = TRANSACTIONS.filter(function(t){ return t.action==='BUY' && new Date(t.date) >= effectivePaceStart && t.base_currency_amount; })
     .reduce(function(s,t){ return s+Number(t.base_currency_amount); },0);
-  const actualMonthlyPace = monthsElapsed > 0 ? actualContributed/monthsElapsed : plannedMonthly;
+  const actualMonthlyPace = paceMonthsElapsed > 0 ? recentContributed/paceMonthsElapsed : plannedMonthly;
+  const paceWindowLabel = effectivePaceStart > startDate ? ('last ' + paceWindowMonths + 'mo') : 'since ' + startDate.toLocaleDateString(undefined,{month:'short',year:'numeric'});
 
   function project(monthlyAmt, months){
     const r = targetCagr/12; let v = currentValue; const series=[v];
@@ -330,7 +378,7 @@ function renderTrajectoryChart(currentValue, target){
       '<text x="' + toX(t.month) + '" y="' + (H-padBottom+14) + '" fill="#7A7886" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">' + String(t.year).slice(2) + '</text>'; }).join('') +
     '</svg><div class="chart-legend">' +
     '<span><span class="chart-sw" style="background:#C9A227"></span>Planned pace (' + fmtUsd(plannedMonthly) + '/mo) - ETA ' + etaLabel(goldProj.hitMonth) + '</span>' +
-    '<span><span class="chart-sw" style="background:#4F8FE8"></span>Actual pace (' + fmtUsd(Math.round(actualMonthlyPace)) + '/mo) - ETA ' + etaLabel(blueProj.hitMonth) + '</span>' +
+    '<span><span class="chart-sw" style="background:#4F8FE8"></span>Actual pace (' + paceWindowLabel + ', ' + fmtUsd(Math.round(actualMonthlyPace)) + '/mo) - ETA ' + etaLabel(blueProj.hitMonth) + '</span>' +
     '</div><p class="hint" style="margin-top:6px;">Both lines use the target CAGR (' + (targetCagr*100).toFixed(0) + '%) as the return rate - a real trailing return (XIRR) isn\'t computed yet.</p></div>';
 }
 
@@ -525,18 +573,12 @@ function renderTickerCards(){
   }).join('');
   const closedTotalAll = closed.reduce(function(s,h){ return s+(h.realized_gain_base||0); },0);
 
-  // Each closed position's own transaction history, from the globally-loaded
-  // TRANSACTIONS (now includes asset_id/account_id/quantity/price/trade_currency
-  // per the WebApp.gs expansion) - "closedDate" is approximated as the latest
-  // transaction date touching that position, since CalcEngine doesn't return a
-  // separate close-date field.
-  function txnsFor(h){
-    return TRANSACTIONS.filter(function(t){ return t.asset_id===h.asset_id && t.account_id===h.account_id; })
-      .slice().sort(function(a,b){ return new Date(b.date)-new Date(a.date); });
-  }
+  // closedDate now comes from CalcEngine's last_transaction_date (cheap, already
+  // part of the routine holdings payload) instead of scanning full transaction
+  // detail - the full per-position history is fetched lazily, only once a card is
+  // actually expanded (see toggleClosedCard), so routine loads stay lightweight.
   function closedDateFor(h){
-    const txns = txnsFor(h);
-    return txns.length ? new Date(txns[0].date) : null;
+    return h.last_transaction_date ? new Date(h.last_transaction_date) : null;
   }
   const fromDate = closedFilter.from ? new Date(closedFilter.from) : null;
   const toDate = closedFilter.to ? new Date(closedFilter.to) : null;
@@ -548,12 +590,13 @@ function renderTickerCards(){
     if(toDate && cd && cd > toDate) return false;
     return true;
   });
+  CLOSED_LIST_CACHE = closedFilteredList;
   const closedTotal = closedFilteredList.reduce(function(s,h){ return s+(h.realized_gain_base||0); },0);
   const filtersActive = !!(closedFilter.ticker || closedFilter.from || closedFilter.to);
 
   const closedFilterHtml = closed.length ? (
     '<div class="closed-filters">' +
-    '<input type="text" name="closed-filter-ticker" id="closed-filter-ticker" placeholder="Filter ticker..." value="' + closedFilter.ticker.replace(/"/g,'') + '" oninput="setClosedFilter(\'ticker\', this.value)" class="price-edit-input">' +
+    '<input type="text" name="closed-filter-ticker" id="closed-filter-ticker" placeholder="Filter ticker..." style="text-transform:uppercase;" value="' + closedFilter.ticker.replace(/"/g,'') + '" oninput="setClosedFilter(\'ticker\', this.value)" class="price-edit-input">' +
     '<input type="date" name="closed-filter-from" id="closed-filter-from" value="' + closedFilter.from + '" onchange="setClosedFilter(\'from\', this.value)" class="price-edit-input">' +
     '<span class="hint" style="align-self:center;">to</span>' +
     '<input type="date" name="closed-filter-to" id="closed-filter-to" value="' + closedFilter.to + '" onchange="setClosedFilter(\'to\', this.value)" class="price-edit-input">' +
@@ -564,19 +607,11 @@ function renderTickerCards(){
   const closedHtml = closedFilteredList.length ? closedFilteredList.map(function(h, ci){
     const localRealized = (h.currency!=='USD' && h.realized_gain_trade_ccy!==null && h.realized_gain_trade_ccy!==undefined)
       ? ' (' + maskable(fmtMoney(h.realized_gain_trade_ccy, h.currency)) + ')' : '';
-    const txns = txnsFor(h);
-    const txnRows = txns.map(function(t){
-      return '<div class="lot-row"><span>' + t.date + '</span><span>' + t.action + '</span>' +
-        '<span>' + (t.quantity!==undefined&&t.quantity!==null?t.quantity:'-') + '</span>' +
-        '<span>' + (t.price!==undefined&&t.price!==null?fmtMoney(Number(t.price), t.trade_currency):'-') + '</span>' +
-        '<span style="text-align:right">' + (t.base_currency_amount!==undefined&&t.base_currency_amount!==null?fmtUsd(Number(t.base_currency_amount)):'-') + '</span></div>';
-    }).join('');
     return '<div class="closed-card" id="cc-' + ci + '">' +
       '<div class="closed-row" onclick="toggleClosedCard(' + ci + ')" style="cursor:pointer;">' +
       '<span>' + h.asset_id + ' - ' + (h.asset_name||'') + ' (' + h.account_id + ')</span>' +
       '<b>Realized: ' + fmtUsd(h.realized_gain_base) + localRealized + '</b></div>' +
-      '<div class="closed-detail-panel"><div class="lot-row head"><span>Date</span><span>Action</span><span>Qty</span><span>Price</span><span style="text-align:right">Base amt</span></div>' +
-      (txnRows || '<p class="hint">No transaction history found for this position.</p>') + '</div></div>';
+      '<div class="closed-detail-panel" id="cc-detail-' + ci + '"><p class="hint">Click to load transaction history...</p></div></div>';
   }).join('') : '<p class="hint">No closed positions match the current filter.</p>';
   const closedTotalHtml = closed.length ? '<div class="closed-row" style="border-color:var(--border);"><span style="font-weight:600;">Total realized P/L - ' + closedFilteredList.length + ' of ' + closed.length + ' closed position(s)</span><b class="change ' + (closedTotal>=0?'up':'down') + '">' + (closedTotal>=0?'+':'-') + maskable(fmtUsd(Math.abs(closedTotal))) + '</b></div>' : '';
   document.getElementById('cards-section').innerHTML = cardsHtml || '<p class="hint">No positions match the current filter.</p>';
@@ -596,13 +631,61 @@ function toggleClosedSection(){
   const el = document.getElementById('closed-toggle');
   if(el) el.classList.toggle('expanded');
 }
-function setClosedFilter(key, value){ closedFilter[key] = value; renderTickerCards(); }
-function clearClosedFilter(){ closedFilter = {ticker:'', from:'', to:''}; renderTickerCards(); }
-function toggleClosedCard(i){
+function setClosedFilter(key, value){
+  closedFilter[key] = key==='ticker' ? value.toUpperCase() : value;
+  // renderTickerCards() rebuilds this input's innerHTML from scratch every
+  // keystroke, which replaces the DOM node and drops focus/cursor position -
+  // capture it beforehand and restore it after, so typing doesn't get kicked out.
+  const active = document.activeElement;
+  const activeId = active && active.id;
+  const selStart = active && typeof active.selectionStart === 'number' ? active.selectionStart : null;
+  const selEnd = active && typeof active.selectionEnd === 'number' ? active.selectionEnd : null;
+  renderTickerCards();
+  if(activeId){
+    const el = document.getElementById(activeId);
+    if(el){
+      el.focus();
+      if(selStart!==null && el.setSelectionRange){ try{ el.setSelectionRange(selStart, selEnd); }catch(e){} }
+    }
+  }
+}
+function clearClosedFilter(){ closedFilter = defaultClosedFilter(); renderTickerCards(); }
+let CLOSED_LIST_CACHE = [];
+let CLOSED_TXN_CACHE = {};
+async function toggleClosedCard(i){
   const card=document.getElementById('cc-'+i);
+  if(!card) return;
   const was=card.classList.contains('expanded');
   document.querySelectorAll('.closed-card').forEach(function(c){ c.classList.remove('expanded'); });
-  if(!was) card.classList.add('expanded');
+  if(was) return; // was open, now just collapse everything above - nothing more to do
+  card.classList.add('expanded');
+  const h = CLOSED_LIST_CACHE[i];
+  if(!h) return;
+  const cacheKey = h.account_id + '::' + h.asset_id;
+  const detailEl = document.getElementById('cc-detail-' + i);
+  if(CLOSED_TXN_CACHE[cacheKey]){
+    detailEl.innerHTML = renderTxnRows(CLOSED_TXN_CACHE[cacheKey]);
+    return;
+  }
+  detailEl.innerHTML = '<p class="hint">Loading...</p>';
+  try{
+    const json = await loadData('position_transactions', { asset_id: h.asset_id, account_id: h.account_id });
+    const txns = (json.transactions || []).slice().sort(function(a,b){ return new Date(b.date)-new Date(a.date); });
+    CLOSED_TXN_CACHE[cacheKey] = txns;
+    detailEl.innerHTML = renderTxnRows(txns);
+  } catch(err){
+    detailEl.innerHTML = '<p class="hint">Could not load transaction history: ' + err.message + '</p>';
+  }
+}
+function renderTxnRows(txns){
+  const rows = txns.map(function(t){
+    return '<div class="lot-row"><span>' + t.date + '</span><span>' + t.action + '</span>' +
+      '<span>' + (t.quantity!==undefined&&t.quantity!==null?t.quantity:'-') + '</span>' +
+      '<span>' + (t.price!==undefined&&t.price!==null?fmtMoney(Number(t.price), t.trade_currency):'-') + '</span>' +
+      '<span style="text-align:right">' + (t.base_currency_amount!==undefined&&t.base_currency_amount!==null?fmtUsd(Number(t.base_currency_amount)):'-') + '</span></div>';
+  }).join('');
+  return '<div class="lot-row head"><span>Date</span><span>Action</span><span>Qty</span><span>Price</span><span style="text-align:right">Base amt</span></div>' +
+    (rows || '<p class="hint">No transaction history found for this position.</p>');
 }
 function toggleCard(i){
   const card=document.getElementById('tc-'+i);
