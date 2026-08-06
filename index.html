@@ -526,7 +526,10 @@ function qClass(q){ if(q===''||q===null||q===undefined) return 'q-mid'; return q
 function renderTickerCards(){
   const allData = HOLDINGS.filter(function(h){ return !String(h.asset_id).startsWith('CASH-'); });
   const open = fullyFiltered(allData).filter(function(h){ return h.quantity > 0; });
-  const closed = allData.filter(function(h){ return h.quantity === 0; });
+  // Was quantity===0 only, which silently dropped partially-closed positions
+  // (some sold, some still held) - CalcEngine already computes their realized
+  // gain correctly, this just widens what the section shows.
+  const closed = allData.filter(function(h){ return h.quantity === 0 || Math.abs(h.realized_gain_base||0) > 1e-9; });
   const sorted = open.slice().sort(function(a,b){ return ((b.market_value_estimated||b.market_value_base)||0) - ((a.market_value_estimated||a.market_value_base)||0); });
   const cardsHtml = sorted.map(function(h,i){
     const dayDir = h.day_gain_pct===null ? 'flat' : h.day_gain_pct>0 ? 'up' : h.day_gain_pct<0 ? 'down' : 'flat';
@@ -607,9 +610,11 @@ function renderTickerCards(){
   const closedHtml = closedFilteredList.length ? closedFilteredList.map(function(h, ci){
     const localRealized = (h.currency!=='USD' && h.realized_gain_trade_ccy!==null && h.realized_gain_trade_ccy!==undefined)
       ? ' (' + maskable(fmtMoney(h.realized_gain_trade_ccy, h.currency)) + ')' : '';
+    const partialBadge = h.quantity > 0
+      ? ' <span class="hint" style="font-weight:400;">(partial - ' + h.quantity + ' still held)</span>' : '';
     return '<div class="closed-card" id="cc-' + ci + '">' +
       '<div class="closed-row" onclick="toggleClosedCard(' + ci + ')" style="cursor:pointer;">' +
-      '<span>' + h.asset_id + ' - ' + (h.asset_name||'') + ' (' + h.account_id + ')</span>' +
+      '<span>' + h.asset_id + ' - ' + (h.asset_name||'') + ' (' + h.account_id + ')' + partialBadge + '</span>' +
       '<b>Realized: ' + fmtUsd(h.realized_gain_base) + localRealized + '</b></div>' +
       '<div class="closed-detail-panel" id="cc-detail-' + ci + '"><p class="hint">Click to load transaction history...</p></div></div>';
   }).join('') : '<p class="hint">No closed positions match the current filter.</p>';
