@@ -62,6 +62,16 @@
   .runner-marker{position:absolute;top:-9px;width:22px;height:22px;border-radius:50%;background:var(--blue);border:3px solid var(--bg);
     box-shadow:0 0 0 2px var(--blue),0 0 10px rgba(79,143,232,.5);transform:translateX(-50%);display:flex;align-items:center;justify-content:center;}
   .runner-marker svg{width:12px;height:12px;color:#08131F;}
+  .finish-flag{position:absolute;top:8px;right:-3px;width:9px;height:16px;
+    background:repeating-conic-gradient(var(--text) 0 25%, var(--bg) 0 50%) 0 0/6px 6px;
+    border-radius:1px;box-shadow:0 0 0 1px var(--border);}
+  .celebrate-burst{position:absolute;top:50%;left:50%;width:4px;height:8px;border-radius:1px;
+    opacity:0;animation:celebrate-pop 1.6s ease-out infinite;pointer-events:none;}
+  @keyframes celebrate-pop{
+    0%{opacity:0;transform:translate(-50%,-50%) rotate(0deg);}
+    10%{opacity:1;}
+    100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) rotate(220deg);}
+  }
   .capital-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
   .capital-title{font-size:10px;letter-spacing:.1em;color:var(--text-faint);margin-bottom:12px;}
   .capital-pools{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
@@ -292,11 +302,26 @@ function renderGoalAndPace(){
     return 100;
   }
   const visualPct = milestoneVisualPct(pct);
+  // Celebration is proximity-based, not a hard crossing-trigger: if the current
+  // value sits within $2,000 of ANY milestone's dollar amount (checked once per
+  // load), a short confetti burst plays around the runner marker itself - not a
+  // separate element. Deliberately a band, not a point, since price moves day to
+  // day and a point-trigger would flicker on/off across refreshes near the line.
+  const NEAR_MILESTONE_BAND_USD = 2000;
+  const nearMilestone = goalAmount && milestonePcts.some(function(m){
+    return Math.abs(knownValue - goalAmount*m/100) <= NEAR_MILESTONE_BAND_USD;
+  });
+  const burstColors = ['var(--gold-bright)','var(--blue)','var(--green)','var(--rose)'];
+  const burstHtml = nearMilestone ? burstColors.map(function(c,i){
+    const angle = (i/burstColors.length)*2*Math.PI + 0.4;
+    const dx = Math.round(Math.cos(angle)*20), dy = Math.round(Math.sin(angle)*20-14);
+    return '<div class="celebrate-burst" style="background:' + c + ';--dx:' + dx + 'px;--dy:' + dy + 'px;animation-delay:' + (i*0.12) + 's;"></div>';
+  }).join('') : '';
   document.getElementById('pace-section').innerHTML =
     '<div class="pace-card"><div class="pace-title">PROGRESS TO GOAL - milestones at 12.5/25/50/100% of goal_amount_usd, evenly spaced for readability</div>' +
-    '<div class="track-wrap"><div class="track"><div class="track-fill" style="width:' + visualPct + '%"></div></div>' +
+    '<div class="track-wrap"><div class="track"><div class="track-fill" style="width:' + visualPct + '%"></div></div><div class="finish-flag"></div>' +
     milestonePcts.map(function(m){ return '<div class="milestone ' + (pct>=m?'passed':'') + '" style="left:' + milestoneVisualPct(m) + '%"></div><div class="milestone-label" style="left:' + milestoneVisualPct(m) + '%">' + m + '%</div>'; }).join('') +
-    '<div class="runner-marker" style="left:' + visualPct + '%"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/></svg></div>' +
+    '<div class="runner-marker" style="left:' + visualPct + '%"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/></svg>' + burstHtml + '</div>' +
     '</div></div>';
 
   renderCapitalCard();
@@ -362,20 +387,26 @@ function renderTrajectoryChart(currentValue, target){
   const toY = function(v){ return H-padBottom - (Math.min(v,maxV)/maxV)*(H-pad-padBottom); };
   const goldPath = goldProj.series.slice(0,(goldProj.hitMonth||monthsMax)+1).map(function(v,i){ return (i===0?'M':'L')+toX(i)+' '+toY(v); }).join(' ');
   const bluePath = blueProj.series.slice(0,(blueProj.hitMonth||monthsMax)+1).map(function(v,i){ return (i===0?'M':'L')+toX(i)+' '+toY(v); }).join(' ');
+  // Tick density adapts to horizon length so a 3-year ETA doesn't get only one or
+  // two ticks the way a fixed 2-year step would produce - annually up to 10 years,
+  // every 2 years beyond that.
   const yearTicks = [];
-  for(let yrs=0; yrs*12<=monthsMax; yrs+=2){ yearTicks.push({month:yrs*12, year: today.getFullYear()+yrs}); }
+  const tickStepYears = monthsMax <= 120 ? 1 : 2;
+  for(let yrs=0; yrs*12<=monthsMax; yrs+=tickStepYears){ yearTicks.push({month:yrs*12, year: today.getFullYear()+yrs}); }
   document.getElementById('trajectory-section').innerHTML =
     '<div class="chart-card"><div class="chart-title">TRAJECTORY TO GOAL</div>' +
     '<div class="chart-sub">Compounding curves from your real current value - contribution pace blended in from actual purchases</div>' +
     '<svg width="100%" height="158" viewBox="0 0 560 158" preserveAspectRatio="none">' +
     '<line x1="' + pad + '" y1="' + toY(goalAmount) + '" x2="' + (W-pad) + '" y2="' + toY(goalAmount) + '" stroke="#232129" stroke-width="1" stroke-dasharray="3 3"/>' +
+    yearTicks.map(function(t){ return '<line x1="' + toX(t.month) + '" y1="' + pad + '" x2="' + toX(t.month) + '" y2="' + (H-padBottom) + '" stroke="#1B1A20" stroke-width="1"/>'; }).join('') +
     '<path d="' + goldPath + '" fill="none" stroke="#C9A227" stroke-width="2"/>' +
     '<path d="' + bluePath + '" fill="none" stroke="#4F8FE8" stroke-width="2"/>' +
     '<circle cx="' + toX(0) + '" cy="' + toY(currentValue) + '" r="3.5" fill="#F2EFE9"/>' +
     '<text x="' + (toX(0)+6) + '" y="' + (toY(currentValue)-6) + '" fill="#A6A3AE" font-size="9" font-family="IBM Plex Mono">today</text>' +
     '<text x="' + (W-pad-24) + '" y="' + (toY(goalAmount)-6) + '" fill="#7A7886" font-size="9" font-family="IBM Plex Mono">' + fmtUsd(goalAmount) + '</text>' +
-    yearTicks.map(function(t){ return '<line x1="' + toX(t.month) + '" y1="' + (H-padBottom) + '" x2="' + toX(t.month) + '" y2="' + (H-padBottom+4) + '" stroke="#7A7886" stroke-width="1"/>' +
-      '<text x="' + toX(t.month) + '" y="' + (H-padBottom+14) + '" fill="#7A7886" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">' + String(t.year).slice(2) + '</text>'; }).join('') +
+    '<line x1="' + pad + '" y1="' + (H-padBottom) + '" x2="' + (W-pad) + '" y2="' + (H-padBottom) + '" stroke="#232129" stroke-width="1"/>' +
+    yearTicks.map(function(t){ return '<line x1="' + toX(t.month) + '" y1="' + (H-padBottom) + '" x2="' + toX(t.month) + '" y2="' + (H-padBottom+5) + '" stroke="#A6A3AE" stroke-width="1.2"/>' +
+      '<text x="' + toX(t.month) + '" y="' + (H-padBottom+16) + '" fill="#D7D4CC" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">' + t.year + '</text>'; }).join('') +
     '</svg><div class="chart-legend">' +
     '<span><span class="chart-sw" style="background:#C9A227"></span>Planned pace (' + fmtUsd(plannedMonthly) + '/mo) - ETA ' + etaLabel(goldProj.hitMonth) + '</span>' +
     '<span><span class="chart-sw" style="background:#4F8FE8"></span>Actual pace (' + paceWindowLabel + ', ' + fmtUsd(Math.round(actualMonthlyPace)) + '/mo) - ETA ' + etaLabel(blueProj.hitMonth) + '</span>' +
@@ -400,12 +431,27 @@ function renderContributionChart(target){
   const toY = function(v){ return H-padBottom - (v/maxV)*(H-pad-padBottom); };
   const actualPath = actualPoints.length ? ('M'+toX(startDate)+' '+toY(0)+' '+actualPoints.map(function(p){ return 'L'+toX(p.date)+' '+toY(p.value); }).join(' ')) : '';
   const plannedPath = 'M'+toX(startDate)+' '+toY(0)+' L'+toX(today)+' '+toY(plannedTotal);
+  // Tick step adapts to how long the target's been active: monthly when young,
+  // widening to quarterly then yearly so labels never crowd together.
+  const tickStepMonths = monthsElapsed<=8 ? 1 : monthsElapsed<=20 ? 3 : monthsElapsed<=48 ? 6 : 12;
+  const dateTicks = [];
+  for(let m=0; ; m+=tickStepMonths){
+    const d = new Date(startDate); d.setMonth(d.getMonth()+m);
+    if(d>today) break;
+    dateTicks.push(d);
+  }
+  if(!dateTicks.length || dateTicks[dateTicks.length-1].getTime()!==today.getTime()) dateTicks.push(today);
+  const tickFmt = tickStepMonths>=12 ? {year:'numeric'} : {month:'short',year:'2-digit'};
   document.getElementById('contribution-section').innerHTML =
     '<div class="chart-card"><div class="chart-title">CONTRIBUTION PACE</div>' +
     '<div class="chart-sub">Cumulative real purchases vs. planned ' + fmtUsd(monthly) + '/month since ' + startDate.toLocaleDateString() + '</div>' +
     '<svg width="100%" height="130" viewBox="0 0 560 130" preserveAspectRatio="none">' +
+    dateTicks.map(function(d){ return '<line x1="' + toX(d) + '" y1="' + pad + '" x2="' + toX(d) + '" y2="' + (H-padBottom) + '" stroke="#1B1A20" stroke-width="1"/>'; }).join('') +
     '<path d="' + plannedPath + '" fill="none" stroke="#7A7886" stroke-width="1.5" stroke-dasharray="4 3"/>' +
     '<path d="' + actualPath + '" fill="none" stroke="#35C48C" stroke-width="2"/>' +
+    '<line x1="' + pad + '" y1="' + (H-padBottom) + '" x2="' + (W-pad) + '" y2="' + (H-padBottom) + '" stroke="#232129" stroke-width="1"/>' +
+    dateTicks.map(function(d){ return '<line x1="' + toX(d) + '" y1="' + (H-padBottom) + '" x2="' + toX(d) + '" y2="' + (H-padBottom+5) + '" stroke="#A6A3AE" stroke-width="1.2"/>' +
+      '<text x="' + toX(d) + '" y="' + (H-padBottom+14) + '" fill="#D7D4CC" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">' + d.toLocaleDateString(undefined,tickFmt) + '</text>'; }).join('') +
     '</svg><div class="chart-legend">' +
     '<span><span class="chart-sw" style="background:#35C48C"></span>Actual: ' + fmtUsd(actualTotal) + '</span>' +
     '<span>Planned: ' + fmtUsd(plannedTotal) + '</span></div></div>';
