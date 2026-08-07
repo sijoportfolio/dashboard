@@ -46,6 +46,8 @@
   .ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
   .rc-eyebrow{font-size:8px;letter-spacing:.12em;color:var(--text-faint);}
   .rc-value{font-family:var(--serif);font-size:18px;font-weight:600;margin:4px 0 2px;}
+  .rc-return{font-size:11px;font-weight:600;margin-bottom:2px;}
+  .rc-return.up{color:var(--green);} .rc-return.down{color:var(--red);}
   .rc-pct{font-size:9px;color:var(--gold-bright);font-family:var(--serif);font-style:italic;}
   .goal-detail{flex:1;min-width:0;}
   .gd-row{display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);padding:4px 0;border-bottom:1px solid var(--border-soft);}
@@ -316,6 +318,7 @@ function renderGoalAndPace(){
           '<circle cx="70" cy="70" r="60" fill="none" stroke="#1E1C24" stroke-width="7"/>' +
           '<circle cx="70" cy="70" r="60" fill="none" stroke="#4F8FE8" stroke-width="7" stroke-dasharray="' + (Math.min(pct,100)/100*2*Math.PI*60).toFixed(1) + ' 10000" stroke-linecap="round"/>' +
         '</svg><div class="ring-center"><div class="rc-eyebrow">PORTFOLIO</div><div class="rc-value">' + maskable(fmtUsd(knownValue)) + '</div>' +
+        (totalGainPct!==null ? '<div class="rc-return ' + (totalGainPct>=0?'up':'down') + '">' + (totalGainPct>=0?'+':'') + totalGainPct.toFixed(1) + '% all-time</div>' : '') +
         '<div class="rc-pct">' + (goalAmount ? pct.toFixed(1)+'% of '+maskable(fmtUsd(goalAmount)) : 'no active target') + '</div></div></div>' +
         '<div class="goal-detail"><div class="gd-row"><span class="k">Positions</span><span class="v">' + nonCash.length + '</span></div>' +
         '<div class="gd-row"><span class="k">At cost (no live price)</span><span class="v ' + (estimatedPositions.length?'loss':'') + '">' + estimatedPositions.length + '</span></div>' +
@@ -480,9 +483,9 @@ function renderTrajectoryChart(currentValue, target){
     '<svg width="100%" height="158" viewBox="0 0 560 158" preserveAspectRatio="none">' +
     '<line x1="' + pad + '" y1="' + toY(goalAmount) + '" x2="' + (W-pad) + '" y2="' + toY(goalAmount) + '" stroke="#232129" stroke-width="1" stroke-dasharray="3 3"/>' +
     yearTicks.map(function(t){ return '<line x1="' + toX(t.m) + '" y1="' + pad + '" x2="' + toX(t.m) + '" y2="' + (H-padBottom) + '" stroke="#1B1A20" stroke-width="1"/>'; }).join('') +
-    '<path d="' + deployedPath + '" fill="none" stroke="#5B6774" stroke-width="1.5" stroke-dasharray="2 2"/>' +
-    '<path d="' + goldPath + '" fill="none" stroke="#C9A227" stroke-width="2"/>' +
-    '<path d="' + bluePath + '" fill="none" stroke="#4F8FE8" stroke-width="2"/>' +
+    '<path d="' + deployedPath + '" fill="none" stroke="#5B6774" stroke-width="2"/>' +
+    '<path d="' + goldPath + '" fill="none" stroke="#C9A227" stroke-width="2" stroke-dasharray="5 3"/>' +
+    '<path d="' + bluePath + '" fill="none" stroke="#4F8FE8" stroke-width="2" stroke-dasharray="5 3"/>' +
     '<line x1="' + toX(monthsFromInceptionToToday) + '" y1="' + pad + '" x2="' + toX(monthsFromInceptionToToday) + '" y2="' + (H-padBottom) + '" stroke="#7A7886" stroke-width="1" stroke-dasharray="1 2"/>' +
     '<circle cx="' + toX(monthsFromInceptionToToday) + '" cy="' + toY(currentValue) + '" r="3.5" fill="#F2EFE9"/>' +
     '<text x="' + (toX(monthsFromInceptionToToday)+6) + '" y="' + (toY(currentValue)-6) + '" fill="#A6A3AE" font-size="9" font-family="IBM Plex Mono">today</text>' +
@@ -492,32 +495,47 @@ function renderTrajectoryChart(currentValue, target){
       '<text x="' + toX(t.m) + '" y="' + (H-padBottom+16) + '" fill="#D7D4CC" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">' + t.year + '</text>'; }).join('') +
     '</svg><div class="chart-legend">' +
     '<span><span class="chart-sw" style="background:#5B6774"></span>Capital deployed to date (cost basis, not market value - real history needs snapshot backfill)</span>' +
-    '<span><span class="chart-sw" style="background:#C9A227"></span>Planned pace (' + fmtUsd(plannedMonthly) + '/mo) - ETA ' + etaLabel(goldProj.hitMonth) + '</span>' +
-    '<span><span class="chart-sw" style="background:#4F8FE8"></span>Actual pace (' + paceWindowLabel + ', ' + fmtUsd(Math.round(actualMonthlyPace)) + '/mo) - ETA ' + etaLabel(blueProj.hitMonth) + '</span>' +
+    '<span><span class="chart-sw" style="background:repeating-linear-gradient(90deg,#C9A227 0 3px,transparent 3px 5px)"></span>Planned pace (' + fmtUsd(plannedMonthly) + '/mo) - ETA ' + etaLabel(goldProj.hitMonth) + '</span>' +
+    '<span><span class="chart-sw" style="background:repeating-linear-gradient(90deg,#4F8FE8 0 3px,transparent 3px 5px)"></span>Actual pace (' + paceWindowLabel + ', ' + fmtUsd(Math.round(actualMonthlyPace)) + '/mo) - ETA ' + etaLabel(blueProj.hitMonth) + '</span>' +
     '</div><p class="hint" style="margin-top:6px;">Both projected lines use the target CAGR (' + (targetCagr*100).toFixed(0) + '%) as the return rate - a real trailing return (XIRR) isn\'t computed yet.</p></div>';
 }
 
 function renderContributionChart(target){
-  if(!target || !TRANSACTIONS.length){ document.getElementById('contribution-section').innerHTML=''; return; }
-  // Starts from real portfolio inception (config.portfolio_inception) rather than
-  // the target's effective_date - the target row only tells us when the CURRENT
-  // plan took effect, not when contributions actually began.
-  const startDate = CONFIG.portfolio_inception ? new Date(CONFIG.portfolio_inception) : new Date(target.effective_date);
-  const monthly = Number(target.monthly_contribution_usd);
+  if(!TARGETS.length || !TRANSACTIONS.length){ document.getElementById('contribution-section').innerHTML=''; return; }
+  // Contribution-plan start is NOT the same thing as portfolio_inception - that's
+  // the earliest transaction across EVERY broker (Zerodha's 2021 history), while
+  // the monthly contribution plan only exists for the goal-tracking side and
+  // began later. Using portfolio_inception here was the actual bug behind last
+  // round's "staggered" report - fixed by anchoring to the earliest targets row
+  // instead, and reading every row as a real step function rather than a single
+  // flat rate applied across the whole history.
+  const sortedTargets = TARGETS.slice().sort(function(a,b){ return new Date(a.effective_date)-new Date(b.effective_date); });
+  const startDate = new Date(sortedTargets[0].effective_date);
+  const today = new Date();
+  function plannedMonthlyAt(date){
+    let applicable = sortedTargets[0];
+    sortedTargets.forEach(function(t){ if(new Date(t.effective_date)<=date) applicable=t; });
+    return Number(applicable.monthly_contribution_usd);
+  }
   const buys = TRANSACTIONS.filter(function(t){ return t.action==='BUY' && new Date(t.date) >= startDate && t.base_currency_amount; })
     .sort(function(a,b){ return new Date(a.date)-new Date(b.date); });
-  const today = new Date();
   const monthsElapsed = Math.max(1, Math.round((today-startDate)/(1000*60*60*24*30)));
   let cum = 0;
   const actualPoints = buys.map(function(b){ cum += Number(b.base_currency_amount); return {date:new Date(b.date), value:cum}; });
   const actualTotal = cum;
-  const plannedTotal = monthly * monthsElapsed;
+  let plannedCum = 0; const plannedPoints = [];
+  for(let cursor=new Date(startDate); cursor<=today; cursor.setMonth(cursor.getMonth()+1)){
+    plannedCum += plannedMonthlyAt(cursor);
+    plannedPoints.push({date:new Date(cursor), value:plannedCum});
+  }
+  const plannedTotal = plannedCum;
+  const planLabel = sortedTargets.map(function(t){ return fmtUsd(Number(t.monthly_contribution_usd))+'/mo from '+new Date(t.effective_date).getFullYear(); }).join(' -> ');
   const W=560,H=130,pad=8,padBottom=20;
   const maxV = Math.max(actualTotal, plannedTotal) * 1.1 || 1;
   const toX = function(d){ return pad + ((d-startDate)/(today-startDate))*(W-2*pad); };
   const toY = function(v){ return H-padBottom - (v/maxV)*(H-pad-padBottom); };
   const actualPath = actualPoints.length ? ('M'+toX(startDate)+' '+toY(0)+' '+actualPoints.map(function(p){ return 'L'+toX(p.date)+' '+toY(p.value); }).join(' ')) : '';
-  const plannedPath = 'M'+toX(startDate)+' '+toY(0)+' L'+toX(today)+' '+toY(plannedTotal);
+  const plannedPath = plannedPoints.length ? ('M'+toX(startDate)+' '+toY(0)+' '+plannedPoints.map(function(p){ return 'L'+toX(p.date)+' '+toY(p.value); }).join(' ')) : '';
   // Tick step adapts to how long the target's been active: monthly when young,
   // widening to quarterly then yearly so labels never crowd together.
   const tickStepMonths = monthsElapsed<=8 ? 1 : monthsElapsed<=20 ? 3 : monthsElapsed<=48 ? 6 : 12;
@@ -531,7 +549,7 @@ function renderContributionChart(target){
   const tickFmt = tickStepMonths>=12 ? {year:'numeric'} : {month:'short',year:'2-digit'};
   document.getElementById('contribution-section').innerHTML =
     '<div class="chart-card"><div class="chart-title">CONTRIBUTION PACE</div>' +
-    '<div class="chart-sub">Cumulative real purchases vs. planned ' + fmtUsd(monthly) + '/month since ' + startDate.toLocaleDateString() + '</div>' +
+    '<div class="chart-sub">Cumulative real purchases vs. planned (' + planLabel + ') since ' + startDate.toLocaleDateString() + '</div>' +
     '<svg width="100%" height="130" viewBox="0 0 560 130" preserveAspectRatio="none">' +
     dateTicks.map(function(d){ return '<line x1="' + toX(d) + '" y1="' + pad + '" x2="' + toX(d) + '" y2="' + (H-padBottom) + '" stroke="#1B1A20" stroke-width="1"/>'; }).join('') +
     '<path d="' + plannedPath + '" fill="none" stroke="#7A7886" stroke-width="1.5" stroke-dasharray="4 3"/>' +
@@ -598,28 +616,50 @@ function computeRendered(dim, data){
 }
 function renderRegionRing(allData){
   const r = computeRendered('region', allData);
-  const paths = r.rendered.map(function(s){ return '<path d="' + arcPath(52,52,46,30,s.startAngle,s.endAngle) + '" fill="' + resolveColor(s.color) + '" class="' + (s.isSelected?'selected':'') + ' ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'region\',\'' + s.label + '\')"></path>'; }).join('');
-  const legend = r.rendered.map(function(s){ return '<div class="rl-row ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'region\',\'' + s.label + '\')"><span class="rl-sw" style="background:' + resolveColor(s.color) + '"></span><span class="rl-label">' + s.label + '</span><span class="rl-val">' + maskable(fmtUsd(s.value)) + ' - ' + Math.round(s.pct*100) + '%</span></div>'; }).join('');
-  return '<div class="region-card"><div class="region-title">BY REGION</div><div class="region-body"><div class="region-ring"><svg class="region-svg" width="104" height="104" viewBox="0 0 104 104">' + paths + '</svg><div class="region-center"><div class="v">' + maskable(fmtUsd(r.total)) + '</div><div class="k">' + (r.activeInThisDim?r.activeInThisDim.value:(filterChain.length?'Subset':'Total')) + '</div></div></div><div class="region-legend">' + legend + '</div></div></div>';
+  const paths = r.rendered.map(function(s){ return '<path d="' + arcPath(52,52,46,30,s.startAngle,s.endAngle) + '" fill="' + resolveColor(s.color) + '" class="' + (s.isSelected?'selected':'') + ' ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'region\',\'' + s.label + '\')" onmouseenter="previewCenter(\'region-center\',' + s.value + ',' + s.pct + ',\'' + s.label.replace(/'/g,"\\'") + '\')" onmouseleave="resetCenter(\'region-center\',' + r.total + ',\'' + (r.activeInThisDim?r.activeInThisDim.value:(filterChain.length?'Subset':'Total')) + '\')"></path>'; }).join('');
+  const legend = r.rendered.map(function(s){ return '<div class="rl-row ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'region\',\'' + s.label + '\')" onmouseenter="previewCenter(\'region-center\',' + s.value + ',' + s.pct + ',\'' + s.label.replace(/'/g,"\\'") + '\')" onmouseleave="resetCenter(\'region-center\',' + r.total + ',\'' + (r.activeInThisDim?r.activeInThisDim.value:(filterChain.length?'Subset':'Total')) + '\')"><span class="rl-sw" style="background:' + resolveColor(s.color) + '"></span><span class="rl-label">' + s.label + '</span><span class="rl-val">' + maskable(fmtUsd(s.value)) + ' - ' + Math.round(s.pct*100) + '%</span></div>'; }).join('');
+  return '<div class="region-card"><div class="region-title">BY REGION</div><div class="region-body"><div class="region-ring"><svg class="region-svg" width="104" height="104" viewBox="0 0 104 104">' + paths + '</svg><div class="region-center" id="region-center"><div class="v">' + maskable(fmtUsd(r.total)) + '</div><div class="k">' + (r.activeInThisDim?r.activeInThisDim.value:(filterChain.length?'Subset':'Total')) + '</div></div></div><div class="region-legend">' + legend + '</div></div></div>';
+}
+// Shared hover-preview for every pie (region ring + all donuts): swaps the
+// center label to the hovered slice's own value/%%/label, reverting to the true
+// total on mouse-leave. valuesHidden (privacy mode) is respected the same way
+// the totals already are.
+function previewCenter(elId, valueUsd, pct, label){
+  const el = document.getElementById(elId);
+  if(!el) return;
+  el.querySelector('.v').textContent = maskable(fmtUsd(valueUsd));
+  el.querySelector('.k').textContent = label + ' - ' + Math.round(pct*100) + '%';
+}
+function resetCenter(elId, totalUsd, label){
+  const el = document.getElementById(elId);
+  if(!el) return;
+  el.querySelector('.v').textContent = maskable(fmtUsd(totalUsd));
+  el.querySelector('.k').textContent = label;
 }
 function renderDonut(dim, title, allData){
   const r = computeRendered(dim, allData);
-  const paths = r.rendered.map(function(s){ return '<path d="' + arcPath(40,40,32,20,s.startAngle,s.endAngle) + '" fill="' + resolveColor(s.color) + '" class="' + (s.isSelected?'selected':'') + ' ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'' + dim + '\',\'' + s.label + '\')"></path>'; }).join('');
+  const centerId = 'donut-center-' + dim;
+  const paths = r.rendered.map(function(s){
+    const localStr = dim==='currency' ? sliceLocalStr(dim, s.label, allData) : '';
+    return '<path d="' + arcPath(40,40,32,20,s.startAngle,s.endAngle) + '" fill="' + resolveColor(s.color) + '" class="' + (s.isSelected?'selected':'') + ' ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'' + dim + '\',\'' + s.label + '\')" onmouseenter="previewCenter(\'' + centerId + '\',' + s.value + ',' + s.pct + ',\'' + s.label.replace(/'/g,"\\'") + (localStr?(' - '+localStr.replace(/'/g,"\\'")):'') + '\')" onmouseleave="resetCenter(\'' + centerId + '\',' + r.total + ',\'' + (r.activeInThisDim?r.activeInThisDim.value:(filterChain.length?'Subset':'Total')) + '\')"></path>';
+  }).join('');
   // For the currency breakdown specifically, also show each slice's own-currency
   // total (not just its USD-converted share) - lets AED/INR totals be compared
   // directly against the actual brokerage platform, same reasoning as the
-  // per-ticker LTP/Total Invested fields.
-  const baseDataForLocal = dim==='currency' ? applyChainExcept(dim, allData) : null;
+  // per-ticker LTP/Total Invested fields. Same figure is now also surfaced on
+  // hover in the center, not just the legend row.
   const legend = r.rendered.map(function(s){
-    let localStr = '';
-    if(dim==='currency' && s.label!=='USD'){
-      const localTotal = baseDataForLocal.filter(function(h){ return h.currency===s.label; })
-        .reduce(function(sum,h){ return sum+(h.market_value_trade_ccy||0); },0);
-      localStr = ' (' + maskable(fmtMoney(localTotal, s.label)) + ')';
-    }
-    return '<div class="legend-row ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'' + dim + '\',\'' + s.label + '\')"><span class="legend-sw" style="background:' + resolveColor(s.color) + '"></span><span class="legend-label">' + s.label + '</span><span class="legend-val">' + Math.round(s.pct*100) + '%' + localStr + '</span></div>';
+    const localStr = dim==='currency' ? sliceLocalStr(dim, s.label, allData) : '';
+    const localDisp = localStr ? ' (' + maskable(localStr) + ')' : '';
+    return '<div class="legend-row ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'' + dim + '\',\'' + s.label + '\')" onmouseenter="previewCenter(\'' + centerId + '\',' + s.value + ',' + s.pct + ',\'' + s.label.replace(/'/g,"\\'") + (localStr?(' - '+localStr.replace(/'/g,"\\'")):'') + '\')" onmouseleave="resetCenter(\'' + centerId + '\',' + r.total + ',\'' + (r.activeInThisDim?r.activeInThisDim.value:(filterChain.length?'Subset':'Total')) + '\')"><span class="legend-sw" style="background:' + resolveColor(s.color) + '"></span><span class="legend-label">' + s.label + '</span><span class="legend-val">' + Math.round(s.pct*100) + '%' + localDisp + '</span></div>';
   }).join('');
-  return '<div class="donut-card"><div class="donut-title">' + title + '</div><div class="donut-body"><div class="donut-center"><svg class="donut-svg" width="80" height="80" viewBox="0 0 80 80">' + paths + '</svg><div class="donut-center-label"><div class="v">' + maskable(fmtUsd(r.total)) + '</div><div class="k">' + (r.activeInThisDim?r.activeInThisDim.value:(filterChain.length?'Subset':'Total')) + '</div></div></div><div class="legend-list">' + legend + '</div></div></div>';
+  return '<div class="donut-card"><div class="donut-title">' + title + '</div><div class="donut-body"><div class="donut-center"><svg class="donut-svg" width="80" height="80" viewBox="0 0 80 80">' + paths + '</svg><div class="donut-center-label" id="' + centerId + '"><div class="v">' + maskable(fmtUsd(r.total)) + '</div><div class="k">' + (r.activeInThisDim?r.activeInThisDim.value:(filterChain.length?'Subset':'Total')) + '</div></div></div><div class="legend-list">' + legend + '</div></div></div>';
+}
+function sliceLocalStr(dim, label, allData){
+  if(dim!=='currency' || label==='USD') return '';
+  const baseDataForLocal = applyChainExcept(dim, allData);
+  const localTotal = baseDataForLocal.filter(function(h){ return h.currency===label; }).reduce(function(sum,h){ return sum+(h.market_value_trade_ccy||0); },0);
+  return fmtMoney(localTotal, label);
 }
 function onSliceClick(dim, value){
   const idx = filterChain.findIndex(function(f){ return f.dim===dim; });
@@ -665,11 +705,11 @@ function renderTickerCards(){
   const closed = allData.filter(function(h){ return h.quantity === 0 || Math.abs(h.realized_gain_base||0) > 1e-9; });
   const sorted = open.slice().sort(function(a,b){ return ((b.market_value_estimated||b.market_value_base)||0) - ((a.market_value_estimated||a.market_value_base)||0); });
   const cardsHtml = sorted.map(function(h,i){
-    const dayDir = h.day_gain_pct===null ? 'flat' : h.day_gain_pct>0 ? 'up' : h.day_gain_pct<0 ? 'down' : 'flat';
-    const dayStr = h.day_gain_pct===null ? '-' : (h.day_gain_pct>0?'+':'') + h.day_gain_pct.toFixed(2) + '%';
-    const totDir = h.total_gain_pct===null ? 'flat' : h.total_gain_pct>0 ? 'up' : h.total_gain_pct<0 ? 'down' : 'flat';
-    const totStr = h.total_gain_pct===null ? '-' : (h.total_gain_pct>0?'+':'') + h.total_gain_pct.toFixed(1) + '%';
-    const stale = h.price_stale_days !== null && h.price_stale_days > 10;
+    const dayDir = h.day_gain_pct==null ? 'flat' : h.day_gain_pct>0 ? 'up' : h.day_gain_pct<0 ? 'down' : 'flat';
+    const dayStr = h.day_gain_pct==null ? '-' : (h.day_gain_pct>0?'+':'') + h.day_gain_pct.toFixed(2) + '%';
+    const totDir = h.total_gain_pct==null ? 'flat' : h.total_gain_pct>0 ? 'up' : h.total_gain_pct<0 ? 'down' : 'flat';
+    const totStr = h.total_gain_pct==null ? '-' : (h.total_gain_pct>0?'+':'') + h.total_gain_pct.toFixed(1) + '%';
+    const stale = h.price_stale_days!=null && h.price_stale_days > 10;
     // LTP and Total invested are shown in the BUY currency (h.currency), never
     // market_value_base's USD, so they line up with what the brokerage platform
     // itself shows - h.latest_price_trade_ccy/h.cost_basis_trade_ccy handle the
@@ -684,7 +724,7 @@ function renderTickerCards(){
     return '<div class="card" id="tc-' + i + '"><div class="row" onclick="toggleCard(' + i + ')">' +
       '<div class="left-col"><div class="ticker-line"><span class="ticker">' + h.asset_id + '</span>' +
       '<span class="qty">x' + Number(h.quantity).toLocaleString(undefined,{maximumFractionDigits:4}) + '</span>' +
-      '<span class="quality-num ' + qClass(h.conviction) + '">' + (h.conviction!==''&&h.conviction!==null? Number(h.conviction).toFixed(1) : '-') + '</span></div>' +
+      '<span class="quality-num ' + qClass(h.conviction) + '">' + (h.conviction!=='' && h.conviction!=null ? Number(h.conviction).toFixed(1) : '-') + '</span></div>' +
       '<span class="name">' + (h.asset_name||'') + ' - ' + h.account_id + '</span>' +
       '<span class="local-value">LTP ' + maskable(ltpStr) + '</span></div>' +
       '<div class="right-col"><span class="mkt-value ' + (h.is_estimated?'estimated':'') + '">' + maskable(displayValue!==null?fmtUsd(displayValue):'-') + (h.is_estimated?' *':'') + '</span>' +
@@ -692,7 +732,7 @@ function renderTickerCards(){
       '<div class="gain-lines"><div class="gain-line"><span class="gain-lbl">24H</span><span class="change ' + dayDir + '">' + dayStr + '</span></div>' +
       '<div class="gain-line"><span class="gain-lbl">ALL-TIME</span><span class="change ' + totDir + '">' + totStr + '</span></div></div>' +
       (stale?('<span class="stale-badge">' + h.price_stale_days + 'd stale</span>'):'') + '</div><span class="chevron">v</span></div>' +
-      '<div class="panel"><div class="meta-line">Avg cost ' + h.avg_cost_per_unit.toFixed(4) + ' ' + h.currency + ' - Total invested ' + maskable(totalInvestedStr) + ' - Realized ' + fmtUsd(h.realized_gain_base) + ' - Fees paid ' + fmtUsd(h.total_fees_paid_base) +
+      '<div class="panel"><div class="meta-line">Avg cost ' + (h.avg_cost_per_unit!=null?h.avg_cost_per_unit.toFixed(4):'-') + ' ' + h.currency + ' - Total invested ' + maskable(totalInvestedStr) + ' - Realized ' + fmtUsd(h.realized_gain_base) + ' - Fees paid ' + fmtUsd(h.total_fees_paid_base) +
       (h.is_estimated?'<br><span style="color:var(--orange)">* At cost - no live price has ever been fetched.</span>':'') + '</div>' +
       (h.manual_override?(
       '<div class="price-edit-row" onclick="event.stopPropagation()">' +
@@ -709,7 +749,7 @@ function renderTickerCards(){
       // partially-closed position's story lives here too now, not only in the
       // separate Sold Positions section, for one holistic per-ticker view.
       '<div class="txn-history-toggle" onclick="event.stopPropagation();toggleOpenCardHistory(' + i + ',\'' + h.account_id + '\',\'' + h.asset_id + '\')">Transaction history ' + (Math.abs(h.realized_gain_base||0)>1e-9 ? '(includes past sells)' : '') + ' &#9662;</div>' +
-      '<div class="closed-detail-panel" id="th-detail-' + i + '"></div>' +
+      '<div class="closed-detail-panel" id="th-detail-' + i + '" data-history-key="' + h.account_id + '::' + h.asset_id + '"></div>' +
       '</div></div>';
   }).join('');
   const closedTotalAll = closed.reduce(function(s,h){ return s+(h.realized_gain_base||0); },0);
@@ -784,6 +824,7 @@ function renderTickerCards(){
     '<b class="change ' + (closedSummaryTotal>=0?'up':'down') + '">' + (closedSummaryTotal>=0?'+':'-') + maskable(fmtUsd(Math.abs(closedSummaryTotal))) + '</b></div>' +
     '<div class="closed-section-body">' + closedFilterHtml + closedTotalHtml + closedHtml + '</div>' +
     '</div>';
+  restoreExpandedHistoryPanels();
 }
 function toggleClosedSection(){
   const el = document.getElementById('closed-toggle');
@@ -810,14 +851,24 @@ function setClosedFilter(key, value){
 function clearClosedFilter(){ closedFilter = defaultClosedFilter(); renderTickerCards(); }
 let CLOSED_LIST_CACHE = [];
 let CLOSED_TXN_CACHE = {};
+// The whole closed-section and cards-section get torn down and rebuilt on every
+// keystroke (setClosedFilter) and every 5-min auto-poll - a DOM class alone
+// (.expanded) doesn't survive that, which is what made an already-loaded history
+// panel look like it "failed to load": it loaded fine, then silently collapsed
+// the moment anything else re-rendered. These track expand state by stable key
+// (account::asset) instead, restored after every render.
+let EXPANDED_CLOSED_KEY = null;
+let EXPANDED_OPEN_HISTORY_KEYS = new Set();
 async function toggleClosedCard(i){
   const card=document.getElementById('cc-'+i);
   if(!card) return;
+  const h = CLOSED_LIST_CACHE[i];
+  const key = h ? (h.account_id + '::' + h.asset_id) : null;
   const was=card.classList.contains('expanded');
   document.querySelectorAll('.closed-card').forEach(function(c){ c.classList.remove('expanded'); });
-  if(was) return; // was open, now just collapse everything above - nothing more to do
+  if(was){ EXPANDED_CLOSED_KEY = null; return; }
   card.classList.add('expanded');
-  const h = CLOSED_LIST_CACHE[i];
+  EXPANDED_CLOSED_KEY = key;
   if(!h) return;
   const cacheKey = h.account_id + '::' + h.asset_id;
   const detailEl = document.getElementById('cc-detail-' + i);
@@ -854,9 +905,11 @@ function toggleCard(i){
 async function toggleOpenCardHistory(i, accountId, assetId){
   const detailEl = document.getElementById('th-detail-' + i);
   if(!detailEl) return;
+  const key = accountId + '::' + assetId;
   const wasOpen = detailEl.classList.contains('expanded');
   detailEl.classList.toggle('expanded');
-  if(wasOpen) return;
+  if(wasOpen){ EXPANDED_OPEN_HISTORY_KEYS.delete(key); return; }
+  EXPANDED_OPEN_HISTORY_KEYS.add(key);
   const cacheKey = accountId + '::' + assetId;
   if(CLOSED_TXN_CACHE[cacheKey]){ detailEl.innerHTML = renderTxnRows(CLOSED_TXN_CACHE[cacheKey]); return; }
   detailEl.innerHTML = '<p class="hint">Loading...</p>';
@@ -868,6 +921,30 @@ async function toggleOpenCardHistory(i, accountId, assetId){
   } catch(err){
     detailEl.innerHTML = '<p class="hint">Could not load transaction history: ' + err.message + '</p>';
   }
+}
+function restoreExpandedHistoryPanels(){
+  // Runs after every renderTickerCards() rebuild - re-applies expand state and
+  // any already-cached transaction content by key, so an open history panel
+  // survives a filter keystroke or the 5-min auto-poll instead of silently
+  // collapsing without any visible error.
+  if(EXPANDED_CLOSED_KEY){
+    const idx = CLOSED_LIST_CACHE.findIndex(function(h){ return (h.account_id+'::'+h.asset_id) === EXPANDED_CLOSED_KEY; });
+    if(idx>=0){
+      const card = document.getElementById('cc-'+idx);
+      const detailEl = document.getElementById('cc-detail-'+idx);
+      if(card) card.classList.add('expanded');
+      if(detailEl && CLOSED_TXN_CACHE[EXPANDED_CLOSED_KEY]) detailEl.innerHTML = renderTxnRows(CLOSED_TXN_CACHE[EXPANDED_CLOSED_KEY]);
+    } else {
+      EXPANDED_CLOSED_KEY = null; // no longer in the filtered/sorted list - nothing to restore
+    }
+  }
+  EXPANDED_OPEN_HISTORY_KEYS.forEach(function(key){
+    const el = document.querySelector('[data-history-key="' + key + '"]');
+    if(el){
+      el.classList.add('expanded');
+      if(CLOSED_TXN_CACHE[key]) el.innerHTML = renderTxnRows(CLOSED_TXN_CACHE[key]);
+    }
+  });
 }
 function renderAll(){ renderGoalAndPace(); renderFiltersAndRings(); renderTickerCards(); }
 function buildAppShell(){
