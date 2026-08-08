@@ -81,6 +81,17 @@
     10%{opacity:1;}
     100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) rotate(220deg);}
   }
+  .fullscreen-celebrate{position:fixed;inset:0;z-index:9999;pointer-events:none;overflow:hidden;}
+  .fs-flash{position:absolute;inset:0;background:radial-gradient(circle at 50% 40%, rgba(223,193,90,.35), transparent 60%);
+    animation:fs-flash-fade 1s ease-out forwards;}
+  @keyframes fs-flash-fade{0%{opacity:0;}15%{opacity:1;}100%{opacity:0;}}
+  .fs-confetti{position:absolute;top:-20px;width:7px;height:13px;border-radius:1px;opacity:0;
+    animation-name:fs-confetti-fall;animation-timing-function:ease-in;animation-fill-mode:forwards;}
+  @keyframes fs-confetti-fall{
+    0%{opacity:0;transform:translateY(0) rotate(0deg);}
+    8%{opacity:1;}
+    100%{opacity:0;transform:translateY(100vh) rotate(360deg);}
+  }
   .capital-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
   .capital-title{font-size:10px;letter-spacing:.1em;color:var(--text-faint);margin-bottom:12px;}
   .pool-detail{max-height:0;overflow:hidden;transition:max-height .2s ease;}
@@ -223,6 +234,7 @@ let CONFIG = {};
 // on blends cash balances and historical realized P/L back in everywhere.
 let excludeCashAndClosed = true;
 function toggleExcludeCashClosed(){ excludeCashAndClosed = !excludeCashAndClosed; renderAll(); }
+let FULLSCREEN_CELEBRATION_SHOWN = false;
 function isoDateStr(d){ return d.toISOString().slice(0,10); }
 function defaultClosedFilter(){
   const today = new Date();
@@ -241,9 +253,10 @@ function setClosedRangePreset(preset){
     closedFilter.from = inceptionStr ? String(inceptionStr).slice(0,10) : isoDateStr(new Date(today.getFullYear()-20,0,1));
     closedFilter.to = isoDateStr(today);
   }
-  renderTickerCards();
+  syncClosedFilterInputs();
+  renderClosedResultsOnly();
 }
-function setClosedSort(by){ closedFilter.sortBy = by; renderTickerCards(); }
+function setClosedSort(by){ closedFilter.sortBy = by; renderClosedResultsOnly(); }
 function toggleValues(){ valuesHidden = !valuesHidden; renderAll(); }
 function maskable(str){ return valuesHidden ? '*****' : str; }
 function accountBroker(accountId){ const a = ACCOUNTS.find(x => x.account_id === accountId); return a ? a.broker : accountId; }
@@ -298,6 +311,18 @@ function renderGoalAndPace(){
   // so the percentage can never silently disagree with the totals next to it.
   const costBasisImplied = knownValue - totalGainBase;
   const totalGainPct = costBasisImplied > 0 ? (totalGainBase/costBasisImplied*100) : null;
+  // Simple annualized version of the same total-return % - NOT a true XIRR (that
+  // needs cash-flow-weighted timing across every individual contribution, which
+  // is what CALCULATE_RETURNS will eventually do). This is a rough
+  // "if this % return had compounded evenly since day one" figure, honestly
+  // labeled as such rather than presented as a real money-weighted return.
+  let annualizedPct = null;
+  if(totalGainPct!==null && CONFIG.portfolio_inception){
+    const daysSinceInception = (new Date() - new Date(CONFIG.portfolio_inception)) / (1000*60*60*24);
+    if(daysSinceInception > 30 && (1+totalGainPct/100) > 0){
+      annualizedPct = (Math.pow(1+totalGainPct/100, 365.25/daysSinceInception) - 1) * 100;
+    }
+  }
   const estimatedPositions = nonCash.filter(h => h.is_estimated);
   const goalAmount = target ? Number(target.goal_amount_usd) : null;
   const targetDate = target ? target.target_date : null;
@@ -323,6 +348,7 @@ function renderGoalAndPace(){
         '<div class="goal-detail"><div class="gd-row"><span class="k">Positions</span><span class="v">' + nonCash.length + '</span></div>' +
         '<div class="gd-row"><span class="k">At cost (no live price)</span><span class="v ' + (estimatedPositions.length?'loss':'') + '">' + estimatedPositions.length + '</span></div>' +
         '<div class="gd-row"><span class="k">Total Gain</span><span class="change ' + (totalGainBase>=0?'up':'down') + '">' + (totalGainBase>=0?'+':'-') + maskable(fmtUsd(Math.abs(totalGainBase))) + (totalGainPct!==null ? ' (' + (totalGainPct>=0?'+':'') + totalGainPct.toFixed(1) + '%)' : '') + '</span></div>' +
+        (annualizedPct!==null ? '<div class="gd-row"><span class="k">Annualized (approx.)</span><span class="change ' + (annualizedPct>=0?'up':'down') + '">' + (annualizedPct>=0?'+':'') + annualizedPct.toFixed(1) + '%/yr</span></div>' : '') +
         '<div class="gd-row"><span class="k">Today\'s Gain</span><span class="change ' + (dayGainBase>=0?'up':'down') + '">' + (dayGainBase>=0?'+':'-') + maskable(fmtUsd(Math.abs(dayGainBase))) + '</span></div></div>' +
       '</div>' +
       (target ?
@@ -368,10 +394,19 @@ function renderGoalAndPace(){
     const dx = Math.round(Math.cos(angle)*20), dy = Math.round(Math.sin(angle)*20-14);
     return '<div class="celebrate-burst" style="background:' + c + ';--dx:' + dx + 'px;--dy:' + dy + 'px;animation-delay:' + (i*0.12) + 's;"></div>';
   }).join('') : '';
+  // Full-screen flash is a ONE-TIME, ~1s event per session (not per render) -
+  // the small burst around the runner marker above is the ongoing/repeating
+  // decoration; this is the bigger "you hit a milestone" moment, guarded so it
+  // doesn't re-fire on every 5-min poll or filter click while still in the band.
+  if(nearMilestone && !FULLSCREEN_CELEBRATION_SHOWN){
+    FULLSCREEN_CELEBRATION_SHOWN = true;
+    triggerFullscreenCelebration();
+  }
   document.getElementById('pace-section').innerHTML =
     '<div class="pace-card"><div class="pace-title">PROGRESS TO GOAL - milestones at 12.5/25/50/100% of goal_amount_usd, evenly spaced for readability</div>' +
-    '<div class="track-wrap"><div class="track"><div class="track-fill" style="width:' + visualPct + '%"></div></div><div class="finish-flag"></div>' +
+    '<div class="track-wrap"><div class="track"><div class="track-fill" style="width:' + visualPct + '%"></div></div>' +
     milestonePcts.map(function(m){ return '<div class="milestone ' + (pct>=m?'passed':'') + '" style="left:' + milestoneVisualPct(m) + '%"></div><div class="milestone-label" style="left:' + milestoneVisualPct(m) + '%">' + m + '%</div>'; }).join('') +
+    '<div class="finish-flag"></div>' +
     '<div class="runner-marker" style="left:' + visualPct + '%"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/></svg>' + burstHtml + '</div>' +
     '</div></div>';
 
@@ -405,6 +440,25 @@ function renderCapitalCard(){
 function togglePoolDetail(key){
   const el = document.getElementById('pool-detail-' + key);
   if(el) el.classList.toggle('expanded');
+}
+// Brief, self-removing full-screen flash for the "you hit a milestone" moment -
+// bigger and louder than the small ongoing runner-marker burst, but still short
+// per the project's established "settles quickly" tone, not a persistent overlay.
+function triggerFullscreenCelebration(){
+  const colors = ['#DFC15A','#4F8FE8','#35C48C','#D67AB1','#B98FE0','#E2883D'];
+  const pieces = [];
+  for(let i=0;i<24;i++){
+    const left = Math.round(Math.random()*100);
+    const delay = (Math.random()*0.3).toFixed(2);
+    const dur = (1.0 + Math.random()*0.5).toFixed(2);
+    const color = colors[i % colors.length];
+    pieces.push('<div class="fs-confetti" style="left:' + left + '%;background:' + color + ';animation-delay:' + delay + 's;animation-duration:' + dur + 's;"></div>');
+  }
+  const el = document.createElement('div');
+  el.className = 'fullscreen-celebrate';
+  el.innerHTML = '<div class="fs-flash"></div>' + pieces.join('');
+  document.body.appendChild(el);
+  setTimeout(function(){ el.remove(); }, 1300);
 }
 
 function renderTrajectoryChart(currentValue, target){
@@ -545,8 +599,12 @@ function renderContributionChart(target){
     if(d>today) break;
     dateTicks.push(d);
   }
-  if(!dateTicks.length || dateTicks[dateTicks.length-1].getTime()!==today.getTime()) dateTicks.push(today);
   const tickFmt = tickStepMonths>=12 ? {year:'numeric'} : {month:'short',year:'2-digit'};
+  if(dateTicks.length && dateTicks[dateTicks.length-1].toLocaleDateString(undefined,tickFmt) === today.toLocaleDateString(undefined,tickFmt)){
+    dateTicks[dateTicks.length-1] = today; // same label either way - just snap the last tick to the real edge instead of showing it twice
+  } else {
+    dateTicks.push(today);
+  }
   document.getElementById('contribution-section').innerHTML =
     '<div class="chart-card"><div class="chart-title">CONTRIBUTION PACE</div>' +
     '<div class="chart-sub">Cumulative real purchases vs. planned (' + planLabel + ') since ' + startDate.toLocaleDateString() + '</div>' +
@@ -616,44 +674,33 @@ function computeRendered(dim, data){
 }
 function renderRegionRing(allData){
   const r = computeRendered('region', allData);
-  const paths = r.rendered.map(function(s){ return '<path d="' + arcPath(52,52,46,30,s.startAngle,s.endAngle) + '" fill="' + resolveColor(s.color) + '" class="' + (s.isSelected?'selected':'') + ' ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'region\',\'' + s.label + '\')" onmouseenter="previewCenter(\'region-center\',' + s.value + ',' + s.pct + ',\'' + s.label.replace(/'/g,"\\'") + '\')" onmouseleave="resetCenter(\'region-center\',' + r.total + ',\'' + (r.activeInThisDim?r.activeInThisDim.value:(filterChain.length?'Subset':'Total')) + '\')"></path>'; }).join('');
-  const legend = r.rendered.map(function(s){ return '<div class="rl-row ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'region\',\'' + s.label + '\')" onmouseenter="previewCenter(\'region-center\',' + s.value + ',' + s.pct + ',\'' + s.label.replace(/'/g,"\\'") + '\')" onmouseleave="resetCenter(\'region-center\',' + r.total + ',\'' + (r.activeInThisDim?r.activeInThisDim.value:(filterChain.length?'Subset':'Total')) + '\')"><span class="rl-sw" style="background:' + resolveColor(s.color) + '"></span><span class="rl-label">' + s.label + '</span><span class="rl-val">' + maskable(fmtUsd(s.value)) + ' - ' + Math.round(s.pct*100) + '%</span></div>'; }).join('');
-  return '<div class="region-card"><div class="region-title">BY REGION</div><div class="region-body"><div class="region-ring"><svg class="region-svg" width="104" height="104" viewBox="0 0 104 104">' + paths + '</svg><div class="region-center" id="region-center"><div class="v">' + maskable(fmtUsd(r.total)) + '</div><div class="k">' + (r.activeInThisDim?r.activeInThisDim.value:(filterChain.length?'Subset':'Total')) + '</div></div></div><div class="region-legend">' + legend + '</div></div></div>';
-}
-// Shared hover-preview for every pie (region ring + all donuts): swaps the
-// center label to the hovered slice's own value/%%/label, reverting to the true
-// total on mouse-leave. valuesHidden (privacy mode) is respected the same way
-// the totals already are.
-function previewCenter(elId, valueUsd, pct, label){
-  const el = document.getElementById(elId);
-  if(!el) return;
-  el.querySelector('.v').textContent = maskable(fmtUsd(valueUsd));
-  el.querySelector('.k').textContent = label + ' - ' + Math.round(pct*100) + '%';
-}
-function resetCenter(elId, totalUsd, label){
-  const el = document.getElementById(elId);
-  if(!el) return;
-  el.querySelector('.v').textContent = maskable(fmtUsd(totalUsd));
-  el.querySelector('.k').textContent = label;
+  const selected = r.rendered.find(function(s){ return s.isSelected; });
+  const centerVal = selected ? selected.value : r.total;
+  const centerLbl = selected ? (selected.label + ' - ' + Math.round(selected.pct*100) + '%') : (filterChain.length?'Subset':'Total');
+  const paths = r.rendered.map(function(s){ return '<path d="' + arcPath(52,52,46,30,s.startAngle,s.endAngle) + '" fill="' + resolveColor(s.color) + '" class="' + (s.isSelected?'selected':'') + ' ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'region\',\'' + s.label + '\')"></path>'; }).join('');
+  const legend = r.rendered.map(function(s){ return '<div class="rl-row ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'region\',\'' + s.label + '\')"><span class="rl-sw" style="background:' + resolveColor(s.color) + '"></span><span class="rl-label">' + s.label + '</span><span class="rl-val">' + maskable(fmtUsd(s.value)) + ' - ' + Math.round(s.pct*100) + '%</span></div>'; }).join('');
+  return '<div class="region-card"><div class="region-title">BY REGION</div><div class="region-body"><div class="region-ring"><svg class="region-svg" width="104" height="104" viewBox="0 0 104 104">' + paths + '</svg><div class="region-center" id="region-center"><div class="v">' + maskable(fmtUsd(centerVal)) + '</div><div class="k">' + centerLbl + '</div></div></div><div class="region-legend">' + legend + '</div></div></div>';
 }
 function renderDonut(dim, title, allData){
   const r = computeRendered(dim, allData);
   const centerId = 'donut-center-' + dim;
+  const selected = r.rendered.find(function(s){ return s.isSelected; });
+  const selectedLocalStr = selected && dim==='currency' ? sliceLocalStr(dim, selected.label, allData) : '';
+  const centerVal = selected ? selected.value : r.total;
+  const centerLbl = selected ? (selected.label + ' - ' + Math.round(selected.pct*100) + '%' + (selectedLocalStr?(' ('+maskable(selectedLocalStr)+')'):'')) : (filterChain.length?'Subset':'Total');
   const paths = r.rendered.map(function(s){
-    const localStr = dim==='currency' ? sliceLocalStr(dim, s.label, allData) : '';
-    return '<path d="' + arcPath(40,40,32,20,s.startAngle,s.endAngle) + '" fill="' + resolveColor(s.color) + '" class="' + (s.isSelected?'selected':'') + ' ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'' + dim + '\',\'' + s.label + '\')" onmouseenter="previewCenter(\'' + centerId + '\',' + s.value + ',' + s.pct + ',\'' + s.label.replace(/'/g,"\\'") + (localStr?(' - '+localStr.replace(/'/g,"\\'")):'') + '\')" onmouseleave="resetCenter(\'' + centerId + '\',' + r.total + ',\'' + (r.activeInThisDim?r.activeInThisDim.value:(filterChain.length?'Subset':'Total')) + '\')"></path>';
+    return '<path d="' + arcPath(40,40,32,20,s.startAngle,s.endAngle) + '" fill="' + resolveColor(s.color) + '" class="' + (s.isSelected?'selected':'') + ' ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'' + dim + '\',\'' + s.label + '\')"></path>';
   }).join('');
   // For the currency breakdown specifically, also show each slice's own-currency
   // total (not just its USD-converted share) - lets AED/INR totals be compared
   // directly against the actual brokerage platform, same reasoning as the
-  // per-ticker LTP/Total Invested fields. Same figure is now also surfaced on
-  // hover in the center, not just the legend row.
+  // per-ticker LTP/Total Invested fields.
   const legend = r.rendered.map(function(s){
     const localStr = dim==='currency' ? sliceLocalStr(dim, s.label, allData) : '';
     const localDisp = localStr ? ' (' + maskable(localStr) + ')' : '';
-    return '<div class="legend-row ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'' + dim + '\',\'' + s.label + '\')" onmouseenter="previewCenter(\'' + centerId + '\',' + s.value + ',' + s.pct + ',\'' + s.label.replace(/'/g,"\\'") + (localStr?(' - '+localStr.replace(/'/g,"\\'")):'') + '\')" onmouseleave="resetCenter(\'' + centerId + '\',' + r.total + ',\'' + (r.activeInThisDim?r.activeInThisDim.value:(filterChain.length?'Subset':'Total')) + '\')"><span class="legend-sw" style="background:' + resolveColor(s.color) + '"></span><span class="legend-label">' + s.label + '</span><span class="legend-val">' + Math.round(s.pct*100) + '%' + localDisp + '</span></div>';
+    return '<div class="legend-row ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'' + dim + '\',\'' + s.label + '\')"><span class="legend-sw" style="background:' + resolveColor(s.color) + '"></span><span class="legend-label">' + s.label + '</span><span class="legend-val">' + Math.round(s.pct*100) + '%' + localDisp + '</span></div>';
   }).join('');
-  return '<div class="donut-card"><div class="donut-title">' + title + '</div><div class="donut-body"><div class="donut-center"><svg class="donut-svg" width="80" height="80" viewBox="0 0 80 80">' + paths + '</svg><div class="donut-center-label" id="' + centerId + '"><div class="v">' + maskable(fmtUsd(r.total)) + '</div><div class="k">' + (r.activeInThisDim?r.activeInThisDim.value:(filterChain.length?'Subset':'Total')) + '</div></div></div><div class="legend-list">' + legend + '</div></div></div>';
+  return '<div class="donut-card"><div class="donut-title">' + title + '</div><div class="donut-body"><div class="donut-center"><svg class="donut-svg" width="80" height="80" viewBox="0 0 80 80">' + paths + '</svg><div class="donut-center-label" id="' + centerId + '"><div class="v">' + maskable(fmtUsd(centerVal)) + '</div><div class="k">' + centerLbl + '</div></div></div><div class="legend-list">' + legend + '</div></div></div>';
 }
 function sliceLocalStr(dim, label, allData){
   if(dim!=='currency' || label==='USD') return '';
@@ -696,6 +743,14 @@ function renderFiltersAndRings(){
   }
 }
 function qClass(q){ if(q===''||q===null||q===undefined) return 'q-mid'; return q>=7.5?'q-high':q>=5.5?'q-mid':'q-low'; }
+// closedDate comes from CalcEngine's last_transaction_date (cheap, already part
+// of the routine holdings payload) instead of scanning full transaction detail -
+// the full per-position history is fetched lazily, only once a card is actually
+// expanded (see toggleClosedCard). Top-level (not nested) since both
+// renderTickerCards and renderClosedResultsOnly need it.
+function closedDateFor(h){
+  return h.last_transaction_date ? new Date(h.last_transaction_date) : null;
+}
 function renderTickerCards(){
   const allData = HOLDINGS.filter(function(h){ return !String(h.asset_id).startsWith('CASH-'); });
   const open = fullyFiltered(allData).filter(function(h){ return h.quantity > 0; });
@@ -754,16 +809,56 @@ function renderTickerCards(){
   }).join('');
   const closedTotalAll = closed.reduce(function(s,h){ return s+(h.realized_gain_base||0); },0);
 
-  // closedDate now comes from CalcEngine's last_transaction_date (cheap, already
-  // part of the routine holdings payload) instead of scanning full transaction
-  // detail - the full per-position history is fetched lazily, only once a card is
-  // actually expanded (see toggleClosedCard), so routine loads stay lightweight.
-  function closedDateFor(h){
-    return h.last_transaction_date ? new Date(h.last_transaction_date) : null;
-  }
+  document.getElementById('cards-section').innerHTML = cardsHtml || '<p class="hint">No positions match the current filter.</p>';
+  // Collapsed by default - only "TOTAL SOLD POSITIONS" + aggregate P/L show until
+  // clicked. The filter-bar INPUTS render exactly once here (this function only
+  // runs on data reload / the 5-min poll, never on a keystroke) - the actual
+  // results list lives in its own #closed-results container that
+  // renderClosedResultsOnly() rebuilds on every filter/sort change instead. This
+  // is the real fix for the mobile "kicked out while typing" bug: recreating an
+  // <input> mid-typing dismisses the on-screen keyboard on phones even when
+  // focus/cursor are correctly restored in code - so the fix is to stop
+  // recreating the input at all, not to restore it faster.
+  const closedSummaryTotal = closedTotalAll;
+  const closedCount = closed.length;
+  document.getElementById('closed-section').innerHTML =
+    '<div class="closed-section-card" id="closed-toggle">' +
+    '<div class="closed-row" onclick="toggleClosedSection()" style="cursor:pointer;border-color:var(--border);">' +
+    '<span style="font-weight:600;">TOTAL SOLD POSITIONS (' + closedCount + ')</span>' +
+    '<b class="change ' + (closedSummaryTotal>=0?'up':'down') + '">' + (closedSummaryTotal>=0?'+':'-') + maskable(fmtUsd(Math.abs(closedSummaryTotal))) + '</b></div>' +
+    '<div class="closed-section-body">' +
+    (closedCount ? (
+      '<div class="closed-filters">' +
+      '<input type="text" name="closed-filter-ticker" id="closed-filter-ticker" placeholder="Filter ticker..." style="text-transform:uppercase;" value="' + closedFilter.ticker.replace(/"/g,'') + '" oninput="setClosedFilter(\'ticker\', this.value)" class="price-edit-input">' +
+      '<input type="date" name="closed-filter-from" id="closed-filter-from" value="' + closedFilter.from + '" onchange="setClosedFilter(\'from\', this.value)" class="price-edit-input">' +
+      '<span class="hint" style="align-self:center;">to</span>' +
+      '<input type="date" name="closed-filter-to" id="closed-filter-to" value="' + closedFilter.to + '" onchange="setClosedFilter(\'to\', this.value)" class="price-edit-input">' +
+      '<button class="refresh-btn" id="closed-filter-clear-btn" style="display:none;" onclick="clearClosedFilter()">Clear</button>' +
+      '</div>' +
+      '<div class="closed-filters" style="margin-top:8px;">' +
+      '<button class="refresh-btn" onclick="setClosedRangePreset(\'ytd\')">YTD</button>' +
+      '<button class="refresh-btn" onclick="setClosedRangePreset(\'ly\')">Last Year</button>' +
+      '<button class="refresh-btn" onclick="setClosedRangePreset(\'inception\')">Since Inception</button>' +
+      '<span class="hint" style="align-self:center;margin-left:8px;">Sort:</span>' +
+      '<button class="refresh-btn" id="closed-sort-date-btn" onclick="setClosedSort(\'date\')">Date</button>' +
+      '<button class="refresh-btn" id="closed-sort-broker-btn" onclick="setClosedSort(\'broker\')">Broker</button>' +
+      '</div>'
+    ) : '') +
+    '<div id="closed-results"></div>' +
+    '</div></div>';
+  renderClosedResultsOnly();
+}
+// Rebuilds ONLY the results list (total line + individual closed/partial-close
+// cards) - never touches the filter-bar <input> elements, so typing, the 5-min
+// auto-poll, and every preset/sort click can all fire freely without ever
+// interrupting a field the user is actively using.
+function renderClosedResultsOnly(){
+  const resultsEl = document.getElementById('closed-results');
+  if(!resultsEl) return;
+  const closed = HOLDINGS.filter(function(h){ return !String(h.asset_id).startsWith('CASH-') && (h.quantity===0 || Math.abs(h.realized_gain_base||0)>1e-9); });
+  const tickerNeedle = closedFilter.ticker.toUpperCase();
   const fromDate = closedFilter.from ? new Date(closedFilter.from) : null;
   const toDate = closedFilter.to ? new Date(closedFilter.to) : null;
-  const tickerNeedle = closedFilter.ticker.trim().toUpperCase();
   const closedFilteredList = closed.filter(function(h){
     if(tickerNeedle && h.asset_id.toUpperCase().indexOf(tickerNeedle) === -1) return false;
     const cd = closedDateFor(h);
@@ -781,25 +876,12 @@ function renderTickerCards(){
   CLOSED_LIST_CACHE = closedFilteredList;
   const closedTotal = closedFilteredList.reduce(function(s,h){ return s+(h.realized_gain_base||0); },0);
   const filtersActive = !!(closedFilter.ticker || closedFilter.from || closedFilter.to);
-
-  const closedFilterHtml = closed.length ? (
-    '<div class="closed-filters">' +
-    '<input type="text" name="closed-filter-ticker" id="closed-filter-ticker" placeholder="Filter ticker..." style="text-transform:uppercase;" value="' + closedFilter.ticker.replace(/"/g,'') + '" oninput="setClosedFilter(\'ticker\', this.value)" class="price-edit-input">' +
-    '<input type="date" name="closed-filter-from" id="closed-filter-from" value="' + closedFilter.from + '" onchange="setClosedFilter(\'from\', this.value)" class="price-edit-input">' +
-    '<span class="hint" style="align-self:center;">to</span>' +
-    '<input type="date" name="closed-filter-to" id="closed-filter-to" value="' + closedFilter.to + '" onchange="setClosedFilter(\'to\', this.value)" class="price-edit-input">' +
-    (filtersActive ? '<button class="refresh-btn" onclick="clearClosedFilter()">Clear</button>' : '') +
-    '</div>' +
-    '<div class="closed-filters" style="margin-top:8px;">' +
-    '<button class="refresh-btn" onclick="setClosedRangePreset(\'ytd\')">YTD</button>' +
-    '<button class="refresh-btn" onclick="setClosedRangePreset(\'ly\')">Last Year</button>' +
-    '<button class="refresh-btn" onclick="setClosedRangePreset(\'inception\')">Since Inception</button>' +
-    '<span class="hint" style="align-self:center;margin-left:8px;">Sort:</span>' +
-    '<button class="refresh-btn ' + (closedFilter.sortBy==='date'?'active-sort':'') + '" onclick="setClosedSort(\'date\')">Date</button>' +
-    '<button class="refresh-btn ' + (closedFilter.sortBy==='broker'?'active-sort':'') + '" onclick="setClosedSort(\'broker\')">Broker</button>' +
-    '</div>'
-  ) : '';
-
+  const clearBtn = document.getElementById('closed-filter-clear-btn');
+  if(clearBtn) clearBtn.style.display = filtersActive ? '' : 'none';
+  const dateBtn = document.getElementById('closed-sort-date-btn');
+  const brokerBtn = document.getElementById('closed-sort-broker-btn');
+  if(dateBtn) dateBtn.className = 'refresh-btn' + (closedFilter.sortBy==='date' ? ' active-sort' : '');
+  if(brokerBtn) brokerBtn.className = 'refresh-btn' + (closedFilter.sortBy==='broker' ? ' active-sort' : '');
   const closedHtml = closedFilteredList.length ? closedFilteredList.map(function(h, ci){
     const localRealized = (h.currency!=='USD' && h.realized_gain_trade_ccy!==null && h.realized_gain_trade_ccy!==undefined)
       ? ' (' + maskable(fmtMoney(h.realized_gain_trade_ccy, h.currency)) + ')' : '';
@@ -812,18 +894,7 @@ function renderTickerCards(){
       '<div class="closed-detail-panel" id="cc-detail-' + ci + '"><p class="hint">Click to load transaction history...</p></div></div>';
   }).join('') : '<p class="hint">No closed positions match the current filter.</p>';
   const closedTotalHtml = closed.length ? '<div class="closed-row" style="border-color:var(--border);"><span style="font-weight:600;">Total realized P/L - ' + closedFilteredList.length + ' of ' + closed.length + ' closed position(s)</span><b class="change ' + (closedTotal>=0?'up':'down') + '">' + (closedTotal>=0?'+':'-') + maskable(fmtUsd(Math.abs(closedTotal))) + '</b></div>' : '';
-  document.getElementById('cards-section').innerHTML = cardsHtml || '<p class="hint">No positions match the current filter.</p>';
-  // Collapsed by default - only "TOTAL SOLD POSITIONS" + aggregate P/L show until
-  // clicked; the filter bar and full list render inside the (hidden until
-  // expanded) detail panel, matching the same .expanded pattern as ticker cards.
-  const closedSummaryTotal = closedTotalAll;
-  document.getElementById('closed-section').innerHTML =
-    '<div class="closed-section-card" id="closed-toggle">' +
-    '<div class="closed-row" onclick="toggleClosedSection()" style="cursor:pointer;border-color:var(--border);">' +
-    '<span style="font-weight:600;">TOTAL SOLD POSITIONS (' + closed.length + ')</span>' +
-    '<b class="change ' + (closedSummaryTotal>=0?'up':'down') + '">' + (closedSummaryTotal>=0?'+':'-') + maskable(fmtUsd(Math.abs(closedSummaryTotal))) + '</b></div>' +
-    '<div class="closed-section-body">' + closedFilterHtml + closedTotalHtml + closedHtml + '</div>' +
-    '</div>';
+  resultsEl.innerHTML = closedTotalHtml + closedHtml;
   restoreExpandedHistoryPanels();
 }
 function toggleClosedSection(){
@@ -832,23 +903,18 @@ function toggleClosedSection(){
 }
 function setClosedFilter(key, value){
   closedFilter[key] = key==='ticker' ? value.toUpperCase() : value;
-  // renderTickerCards() rebuilds this input's innerHTML from scratch every
-  // keystroke, which replaces the DOM node and drops focus/cursor position -
-  // capture it beforehand and restore it after, so typing doesn't get kicked out.
-  const active = document.activeElement;
-  const activeId = active && active.id;
-  const selStart = active && typeof active.selectionStart === 'number' ? active.selectionStart : null;
-  const selEnd = active && typeof active.selectionEnd === 'number' ? active.selectionEnd : null;
-  renderTickerCards();
-  if(activeId){
-    const el = document.getElementById(activeId);
-    if(el){
-      el.focus();
-      if(selStart!==null && el.setSelectionRange){ try{ el.setSelectionRange(selStart, selEnd); }catch(e){} }
-    }
-  }
+  renderClosedResultsOnly();
 }
-function clearClosedFilter(){ closedFilter = defaultClosedFilter(); renderTickerCards(); }
+function clearClosedFilter(){
+  closedFilter = defaultClosedFilter();
+  syncClosedFilterInputs();
+  renderClosedResultsOnly();
+}
+function syncClosedFilterInputs(){
+  const t = document.getElementById('closed-filter-ticker'); if(t) t.value = closedFilter.ticker;
+  const f = document.getElementById('closed-filter-from'); if(f) f.value = closedFilter.from;
+  const to = document.getElementById('closed-filter-to'); if(to) to.value = closedFilter.to;
+}
 let CLOSED_LIST_CACHE = [];
 let CLOSED_TXN_CACHE = {};
 // The whole closed-section and cards-section get torn down and rebuilt on every
