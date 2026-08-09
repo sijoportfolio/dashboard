@@ -70,7 +70,7 @@
   .milestone-flagpole{position:absolute;top:-6px;width:1px;height:18px;background:var(--border);transform:translateX(-50%);}
   .milestone-flagpole.passed{background:var(--gold-dim);}
   .milestone-flag{position:absolute;top:-6px;width:7px;height:6px;transform:translateX(1px);
-    background:repeating-conic-gradient(var(--text-faint) 0 25%, transparent 0 50%) 0 0/4px 4px;clip-path:polygon(0 0,100% 20%,0 40%);}
+    background:repeating-conic-gradient(var(--text-faint) 0 25%, var(--bg) 0 50%) 0 0/4px 4px;clip-path:polygon(0 0,100% 20%,0 40%);}
   .milestone-flag.passed{background:repeating-conic-gradient(var(--gold-bright) 0 25%, var(--bg) 0 50%) 0 0/4px 4px;}
   .milestone-label{position:absolute;top:24px;font-size:8px;color:var(--text-faint);transform:translateX(-50%);white-space:nowrap;}
   .runner-marker{position:absolute;top:-9px;width:22px;height:22px;border-radius:50%;background:var(--blue);border:3px solid var(--bg);
@@ -213,6 +213,11 @@
     border-radius:9px;padding:9px 14px;margin-bottom:6px;font-size:10px;color:var(--text-dim);}
   .closed-row b{font-family:var(--mono);color:var(--text);}
   .closed-filters{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;}
+  .ticker-suggest{position:absolute;top:100%;left:0;z-index:50;min-width:100%;max-height:160px;overflow-y:auto;
+    background:var(--surface-2);border:1px solid var(--border-soft);border-radius:6px;margin-top:2px;display:none;}
+  .ticker-suggest.show{display:block;}
+  .ticker-suggest-row{padding:6px 10px;font-size:11px;font-family:var(--mono);cursor:pointer;white-space:nowrap;}
+  .ticker-suggest-row:hover{background:var(--surface);}
   .closed-card{margin-bottom:6px;}
   .closed-card .closed-row{margin-bottom:0;border-radius:9px 9px 0 0;}
   .closed-card:not(.expanded) .closed-row{border-radius:9px;}
@@ -481,16 +486,23 @@ function renderTrajectoryChart(currentValue, target){
 
   // Real contribution pace, blended into the ETA projection instead of treating the
   // trajectory and CONTRIBUTION PACE chart as two disconnected things. Uses a
-  // TRAILING window (last 6 months, or the full history if the target is younger
+  // TRAILING window (last 12 months, or the full history if the target is younger
   // than that) rather than averaging since the target's effective_date - the plan
-  // stepped up from $2,000/mo to $3,000/mo, so a since-inception average would
-  // dilute the current, more realistic pace with years of the older lower amount.
+  // stepped up across four tiers ($500/1000/2000/3000 per mo), so a since-inception
+  // average would badly dilute the current, more realistic pace with years of the
+  // older lower amounts. 12 months (widened from an initial 6) balances staying
+  // responsive to real step-ups against not over-reacting to any single unusually
+  // light or heavy month.
+  // NOTE: a real trailing window will also pick up one-time capital (e.g. a loan)
+  // the same as ongoing contributions - worth knowing if a lump sum lands inside
+  // this window, since it can temporarily inflate this figure beyond what's
+  // actually sustainable month to month.
   // The return RATE still uses target_cagr for both lines - a real trailing return
   // (XIRR) is CALCULATE_RETURNS, a separate not-yet-built piece (bucket D) - only
   // the contribution side of the projection is upgraded here.
   const startDate = new Date(target.effective_date);
   const today = new Date();
-  const paceWindowMonths = 6;
+  const paceWindowMonths = 12;
   const paceWindowStart = new Date(today); paceWindowStart.setMonth(paceWindowStart.getMonth()-paceWindowMonths);
   const effectivePaceStart = paceWindowStart > startDate ? paceWindowStart : startDate;
   const paceMonthsElapsed = Math.max(1, (today-effectivePaceStart)/(1000*60*60*24*30));
@@ -831,7 +843,10 @@ function renderFiltersAndRings(){
   // Currency and broker exposure legitimately include cash sitting in that
   // currency/account - now gated on the same master toggle as the totals ring,
   // rather than being permanently on, so the whole page moves together.
-  const withCashData = HOLDINGS.filter(function(h){ return (includeCash && String(h.asset_id).startsWith('CASH-')) || h.quantity > 0; });
+  const withCashData = HOLDINGS.filter(function(h){
+    const isCash = String(h.asset_id).startsWith('CASH-');
+    return isCash ? includeCash : h.quantity > 0;
+  });
   const cashSuffix = includeCash ? ' (incl. cash)' : '';
   document.getElementById('region-ring-section').innerHTML = renderRegionRing(investedData);
   document.getElementById('donut-grid').innerHTML =
@@ -916,11 +931,15 @@ function renderTickerCards(){
       (h.lots||[]).map(function(l){ return '<div class="lot-row"><span>' + l.lot_id + '<br><span style="color:var(--text-faint)">' + l.date + '</span></span><span>' + l.qty + '</span><span>' + l.cost_per_unit + '</span>' +
         '<span>' + (l.term?('<span class="lot-term ' + l.term.toLowerCase() + '">' + l.term + '</span>'):'-') + '</span>' +
         '<span class="lot-gl ' + (l.unrealized_gain_base>=0?'up':'down') + '">' + (l.harvest_candidate?'[H] ':'') + (l.unrealized_gain_base!==null?fmtUsd(l.unrealized_gain_base):'-') + '</span></div>'; }).join('') +
-      // Full buy/sell history, including any past sells on this same ticker - a
-      // partially-closed position's story lives here too now, not only in the
-      // separate Sold Positions section, for one holistic per-ticker view.
-      '<div class="txn-history-toggle" onclick="event.stopPropagation();toggleOpenCardHistory(' + i + ',\'' + h.account_id + '\',\'' + h.asset_id + '\')">Transaction history ' + (Math.abs(h.realized_gain_base||0)>1e-9 ? '(includes past sells)' : '') + ' &#9662;</div>' +
-      '<div class="closed-detail-panel" id="th-detail-' + i + '" data-history-key="' + h.account_id + '::' + h.asset_id + '"></div>' +
+      // Full buy/sell history - only shown when there actually IS history beyond
+      // the lots already visible above (i.e. this ticker has been sold from at
+      // some point, even partially). A pure-buy position's whole story is
+      // already in the lots table, so the link stays hidden rather than
+      // pointing to a view that would just repeat what's on screen.
+      (Math.abs(h.realized_gain_base||0)>1e-9 ?
+        '<div class="txn-history-toggle" onclick="event.stopPropagation();toggleOpenCardHistory(' + i + ',\'' + h.account_id + '\',\'' + h.asset_id + '\')">Transaction history (includes past sells) &#9662;</div>' +
+        '<div class="closed-detail-panel" id="th-detail-' + i + '" data-history-key="' + h.account_id + '::' + h.asset_id + '"></div>'
+        : '') +
       '</div></div>';
   }).join('');
   const closedTotalAll = closed.reduce(function(s,h){ return s+(h.realized_gain_base||0); },0);
@@ -945,7 +964,10 @@ function renderTickerCards(){
     '<div class="closed-section-body">' +
     (closedCount ? (
       '<div class="closed-filters">' +
-      '<input type="text" name="closed-filter-ticker" id="closed-filter-ticker" placeholder="Filter ticker..." style="text-transform:uppercase;" value="' + closedFilter.ticker.replace(/"/g,'') + '" oninput="setClosedFilter(\'ticker\', this.value)" class="price-edit-input">' +
+      '<span style="position:relative;display:inline-block;">' +
+      '<input type="text" name="closed-filter-ticker" id="closed-filter-ticker" placeholder="Filter ticker..." style="text-transform:uppercase;" value="' + closedFilter.ticker.replace(/"/g,'') + '" oninput="setClosedFilter(\'ticker\', this.value)" onfocus="updateTickerSuggestions(this.value)" class="price-edit-input">' +
+      '<div id="closed-ticker-suggest" class="ticker-suggest"></div>' +
+      '</span>' +
       '<select name="closed-filter-broker" id="closed-filter-broker" onchange="setClosedFilter(\'broker\', this.value)" class="price-edit-input">' + brokerFilterOptions() + '</select>' +
       '<input type="date" name="closed-filter-from" id="closed-filter-from" value="' + closedFilter.from + '" onchange="setClosedFilter(\'from\', this.value)" class="price-edit-input">' +
       '<span class="hint" style="align-self:center;">to</span>' +
@@ -1021,11 +1043,13 @@ function toggleClosedSection(){
 }
 function setClosedFilter(key, value){
   closedFilter[key] = key==='ticker' ? value.toUpperCase() : value;
+  if(key==='ticker') updateTickerSuggestions(closedFilter.ticker);
   renderClosedResultsOnly();
 }
 function clearClosedFilter(){
   closedFilter = defaultClosedFilter();
   syncClosedFilterInputs();
+  hideTickerSuggestions();
   renderClosedResultsOnly();
 }
 function syncClosedFilterInputs(){
@@ -1034,6 +1058,37 @@ function syncClosedFilterInputs(){
   const f = document.getElementById('closed-filter-from'); if(f) f.value = closedFilter.from;
   const to = document.getElementById('closed-filter-to'); if(to) to.value = closedFilter.to;
 }
+// Lines up matching tickers under the filter input as each letter is typed -
+// built from the actual closed/partial-close list (not a hardcoded symbol set),
+// so it always reflects whatever's really in the ledger. Prefix match, since
+// that's the natural feel for a typeahead.
+function updateTickerSuggestions(prefix){
+  const el = document.getElementById('closed-ticker-suggest');
+  if(!el) return;
+  const p = (prefix||'').toUpperCase();
+  if(!p){ el.classList.remove('show'); el.innerHTML=''; return; }
+  const closedTickers = Array.from(new Set(HOLDINGS.filter(function(h){
+    return !String(h.asset_id).startsWith('CASH-') && (h.quantity===0 || Math.abs(h.realized_gain_base||0)>1e-9);
+  }).map(function(h){ return h.asset_id; })));
+  const matches = closedTickers.filter(function(t){ return t.toUpperCase().indexOf(p)===0; }).sort().slice(0,8);
+  if(!matches.length){ el.classList.remove('show'); el.innerHTML=''; return; }
+  el.innerHTML = matches.map(function(t){ return '<div class="ticker-suggest-row" onmousedown="selectTickerSuggestion(\'' + t.replace(/'/g,"\\'") + '\')">' + t + '</div>'; }).join('');
+  el.classList.add('show');
+}
+function selectTickerSuggestion(ticker){
+  closedFilter.ticker = ticker;
+  const t = document.getElementById('closed-filter-ticker'); if(t) t.value = ticker;
+  hideTickerSuggestions();
+  renderClosedResultsOnly();
+}
+function hideTickerSuggestions(){
+  const el = document.getElementById('closed-ticker-suggest');
+  if(el){ el.classList.remove('show'); el.innerHTML=''; }
+}
+document.addEventListener('click', function(e){
+  if(e.target && e.target.id==='closed-filter-ticker') return;
+  hideTickerSuggestions();
+});
 let CLOSED_LIST_CACHE = [];
 let CLOSED_TXN_CACHE = {};
 // The whole closed-section and cards-section get torn down and rebuilt on every
