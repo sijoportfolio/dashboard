@@ -197,8 +197,7 @@
   .panel{border-top:1px solid var(--border-soft);padding:12px 14px;display:none;background:var(--surface-2);}
   .card.expanded .panel{display:block;}
   .meta-line{font-size:9.5px;font-family:var(--mono);color:var(--text-faint);margin-bottom:10px;line-height:1.6;}
-  .txn-history-toggle{font-size:9.5px;color:var(--blue);cursor:pointer;margin-top:8px;}
-  .txn-history-toggle:hover{text-decoration:underline;}
+  .txn-history-label{font-size:9.5px;color:var(--text-faint);margin-top:8px;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;}
   .lot-row{display:grid;grid-template-columns:1.1fr .7fr .9fr .8fr 1fr;gap:6px;padding:5px 0;border-bottom:1px solid var(--border-soft);
     font-family:var(--mono);font-size:9.5px;align-items:center;}
   .lot-row:last-child{border-bottom:none;}
@@ -319,7 +318,12 @@ function renderGoalAndPace(){
   // positions on its own (quantity 0), so the toggle only needs to separately
   // gate whether REALIZED gain (closed/partial-close history) counts toward the
   // headline gain figure - a partial close's still-open portion always counts.
-  const baseData = HOLDINGS.filter(h => includeCash || !String(h.asset_id).startsWith('CASH-'));
+  // Now respects the SAME filterChain the pies below use (fullyFiltered - no
+  // dim excluded, unlike the pies which exclude their own dim so you can still
+  // click between siblings). Selecting a broker/region/etc slice below now
+  // narrows the headline total/gain/% to just that subset too, not only the
+  // sub-pies - the two were disconnected before.
+  const baseData = fullyFiltered(HOLDINGS.filter(h => includeCash || !String(h.asset_id).startsWith('CASH-')));
   const knownValue = baseData.reduce((s,h) => s + (h.market_value_estimated!==undefined ? (h.market_value_estimated||0) : (h.market_value_base||0)), 0);
   const totalGainBase = baseData.reduce((s,h) => s + (h.unrealized_gain_base||0) + (includeClosedGain ? (h.realized_gain_base||0) : 0), 0);
   const dayGainBase = baseData.reduce((s,h) => s + (h.day_gain_base||0), 0);
@@ -359,7 +363,7 @@ function renderGoalAndPace(){
         '<div class="ring-wrap"><svg width="140" height="140" viewBox="0 0 140 140" style="transform:rotate(-90deg)">' +
           '<circle cx="70" cy="70" r="60" fill="none" stroke="#1E1C24" stroke-width="7"/>' +
           '<circle cx="70" cy="70" r="60" fill="none" stroke="#4F8FE8" stroke-width="7" stroke-dasharray="' + (Math.min(pct,100)/100*2*Math.PI*60).toFixed(1) + ' 10000" stroke-linecap="round"/>' +
-        '</svg><div class="ring-center"><div class="rc-eyebrow">PORTFOLIO</div><div class="rc-value">' + maskable(fmtUsd(knownValue)) + '</div>' +
+        '</svg><div class="ring-center"><div class="rc-eyebrow">' + (filterChain.length ? filterChain.map(f=>f.value).join(' + ') : 'PORTFOLIO') + '</div><div class="rc-value">' + maskable(fmtUsd(knownValue)) + '</div>' +
         (totalGainPct!==null ? '<div class="rc-return ' + (totalGainPct>=0?'up':'down') + '">' + (totalGainPct>=0?'+':'') + totalGainPct.toFixed(1) + '% all-time</div>' : '') +
         '<div class="rc-pct">' + (goalAmount ? pct.toFixed(1)+'% of '+maskable(fmtUsd(goalAmount)) : 'no active target') + '</div></div></div>' +
         '<div class="goal-detail"><div class="gd-row"><span class="k">Positions</span><span class="v">' + nonCash.length + '</span></div>' +
@@ -552,8 +556,8 @@ function renderTrajectoryChart(currentValue, target){
   const deployedPoints = deployedBuys.map(function(t){ deployedCum += Number(t.base_currency_amount); return {m: (new Date(t.date)-inceptionDate)/(1000*60*60*24*30), v: deployedCum}; });
   const deployedPath = deployedPoints.length ? ('M'+toX(0)+' '+toY(0)+' '+deployedPoints.map(function(p){ return 'L'+toX(p.m)+' '+toY(p.v); }).join(' ')+' L'+toX(monthsFromInceptionToToday)+' '+toY(deployedCum)) : '';
 
-  const goldPath = goldProj.series.slice(0, monthsMax+1).map(function(v,i){ return (i===0?'M':'L')+toX(monthsFromInceptionToToday+i)+' '+toY(v); }).join(' ');
-  const bluePath = blueProj.series.slice(0, monthsMax+1).map(function(v,i){ return (i===0?'M':'L')+toX(monthsFromInceptionToToday+i)+' '+toY(v); }).join(' ');
+  const goldPath = goldProj.series.slice(0, (goldProj.hitMonth||monthsMax)+1).map(function(v,i){ return (i===0?'M':'L')+toX(monthsFromInceptionToToday+i)+' '+toY(v); }).join(' ');
+  const bluePath = blueProj.series.slice(0, (blueProj.hitMonth||monthsMax)+1).map(function(v,i){ return (i===0?'M':'L')+toX(monthsFromInceptionToToday+i)+' '+toY(v); }).join(' ');
   // Tick density adapts to the FULL span (history + projection) so a long
   // inception-to-goal horizon doesn't crowd, and a short one doesn't look empty.
   const yearTicks = [];
@@ -597,11 +601,13 @@ function renderTrajectoryChart(currentValue, target){
         return {x:toX(mFromInception), y:toY(cum), dateLabel:dateLabel, lines:[{color:'#5B6774',label:'Deployed',val:fmtUsd(cum)}]};
       }
       const monthsFromToday = Math.round(mFromInception - monthsFromInceptionToToday);
-      const gv = goldProj.series[Math.min(monthsFromToday, goldProj.series.length-1)];
-      const bv = blueProj.series[Math.min(monthsFromToday, blueProj.series.length-1)];
-      return {x:toX(mFromInception), y:toY(bv), dateLabel:dateLabel, lines:[
-        {color:'#C9A227',label:'Planned',val:fmtUsd(Math.round(gv))},
-        {color:'#4F8FE8',label:'Actual pace',val:fmtUsd(Math.round(bv))}
+      const goldDone = goldProj.hitMonth!==null && monthsFromToday > goldProj.hitMonth;
+      const blueDone = blueProj.hitMonth!==null && monthsFromToday > blueProj.hitMonth;
+      const gv = goldProj.series[Math.min(monthsFromToday, goldProj.hitMonth!==null?goldProj.hitMonth:goldProj.series.length-1)];
+      const bv = blueProj.series[Math.min(monthsFromToday, blueProj.hitMonth!==null?blueProj.hitMonth:blueProj.series.length-1)];
+      return {x:toX(mFromInception), y:toY(blueDone?goalAmount:bv), dateLabel:dateLabel, lines:[
+        {color:'#C9A227',label:'Planned',val:goldDone?'Goal reached':fmtUsd(Math.round(gv))},
+        {color:'#4F8FE8',label:'Actual pace',val:blueDone?'Goal reached':fmtUsd(Math.round(bv))}
       ]};
     }
   });
@@ -944,12 +950,12 @@ function renderTickerCards(){
         '<span class="lot-gl ' + (l.unrealized_gain_base>=0?'up':'down') + '">' + (l.harvest_candidate?'[H] ':'') + (l.unrealized_gain_base!==null?fmtUsd(l.unrealized_gain_base):'-') + '</span></div>'; }).join('') +
       // Full buy/sell history - only shown when there actually IS history beyond
       // the lots already visible above (i.e. this ticker has been sold from at
-      // some point, even partially). A pure-buy position's whole story is
-      // already in the lots table, so the link stays hidden rather than
-      // pointing to a view that would just repeat what's on screen.
+      // some point, even partially). Renders instantly, synchronously, from the
+      // already-loaded TRANSACTIONS array as soon as the card is expanded - no
+      // click, no network call, no dependency on position_transactions at all.
       (Math.abs(h.realized_gain_base||0)>1e-9 ?
-        '<div class="txn-history-toggle" onclick="event.stopPropagation();toggleOpenCardHistory(' + i + ',\'' + h.account_id + '\',\'' + h.asset_id + '\')">Transaction history (includes past sells) &#9662;</div>' +
-        '<div class="closed-detail-panel" id="th-detail-' + i + '" data-history-key="' + h.account_id + '::' + h.asset_id + '"></div>'
+        '<div class="txn-history-label">Transaction history (includes past sells)</div>' +
+        renderTxnRows(TRANSACTIONS.filter(function(t){ return t.asset_id===h.asset_id && t.account_id===h.account_id; }))
         : '') +
       '</div></div>';
   }).join('');
@@ -1042,7 +1048,9 @@ function renderClosedResultsOnly(){
       '<div class="closed-row" onclick="toggleClosedCard(' + ci + ')" style="cursor:pointer;">' +
       '<span>' + h.asset_id + ' - ' + (h.asset_name||'') + ' (' + h.account_id + ')' + partialBadge + '</span>' +
       '<b>Realized: ' + fmtUsd(h.realized_gain_base) + localRealized + '</b></div>' +
-      '<div class="closed-detail-panel" id="cc-detail-' + ci + '"><p class="hint">Click to load transaction history...</p></div></div>';
+      '<div class="closed-detail-panel" id="cc-detail-' + ci + '">' +
+      renderTxnRows(TRANSACTIONS.filter(function(t){ return t.asset_id===h.asset_id && t.account_id===h.account_id; })) +
+      '</div></div>';
   }).join('') : '<p class="hint">No closed positions match the current filter.</p>';
   const closedTotalHtml = closed.length ? '<div class="closed-row" style="border-color:var(--border);"><span style="font-weight:600;">Total realized P/L - ' + closedFilteredList.length + ' of ' + closed.length + ' closed position(s)</span><b class="change ' + (closedTotal>=0?'up':'down') + '">' + (closedTotal>=0?'+':'-') + maskable(fmtUsd(Math.abs(closedTotal))) + '</b></div>' : '';
   resultsEl.innerHTML = closedTotalHtml + closedHtml;
@@ -1101,44 +1109,23 @@ document.addEventListener('click', function(e){
   hideTickerSuggestions();
 });
 let CLOSED_LIST_CACHE = [];
-let CLOSED_TXN_CACHE = {};
-// The whole closed-section and cards-section get torn down and rebuilt on every
-// keystroke (setClosedFilter) and every 5-min auto-poll - a DOM class alone
-// (.expanded) doesn't survive that, which is what made an already-loaded history
-// panel look like it "failed to load": it loaded fine, then silently collapsed
-// the moment anything else re-rendered. These track expand state by stable key
-// (account::asset) instead, restored after every render.
+// Expand state (which single closed card is open) still needs tracking by
+// stable key across re-renders (keystroke/auto-poll rebuild the whole section),
+// but there's no cache/fetch to restore anymore - content is already baked into
+// every card's HTML at render time, so this only needs to re-apply one CSS class.
 let EXPANDED_CLOSED_KEY = null;
-let EXPANDED_OPEN_HISTORY_KEYS = new Set();
-async function toggleClosedCard(i){
+function toggleClosedCard(i){
   const card=document.getElementById('cc-'+i);
   if(!card) return;
   const h = CLOSED_LIST_CACHE[i];
-  const key = h ? (h.account_id + '::' + h.asset_id) : null;
   const was=card.classList.contains('expanded');
   document.querySelectorAll('.closed-card').forEach(function(c){ c.classList.remove('expanded'); });
-  if(was){ EXPANDED_CLOSED_KEY = null; return; }
-  card.classList.add('expanded');
-  EXPANDED_CLOSED_KEY = key;
-  if(!h) return;
-  const cacheKey = h.account_id + '::' + h.asset_id;
-  const detailEl = document.getElementById('cc-detail-' + i);
-  if(CLOSED_TXN_CACHE[cacheKey]){
-    detailEl.innerHTML = renderTxnRows(CLOSED_TXN_CACHE[cacheKey]);
-    return;
-  }
-  detailEl.innerHTML = '<p class="hint">Loading...</p>';
-  try{
-    const json = await loadData('position_transactions', { asset_id: h.asset_id, account_id: h.account_id });
-    const txns = (json.transactions || []).slice().sort(function(a,b){ return new Date(b.date)-new Date(a.date); });
-    CLOSED_TXN_CACHE[cacheKey] = txns;
-    detailEl.innerHTML = renderTxnRows(txns);
-  } catch(err){
-    detailEl.innerHTML = '<p class="hint">Could not load transaction history: ' + err.message + '</p>';
-  }
+  EXPANDED_CLOSED_KEY = was ? null : (h ? (h.account_id + '::' + h.asset_id) : null);
+  if(!was) card.classList.add('expanded');
 }
 function renderTxnRows(txns){
-  const rows = txns.map(function(t){
+  const sorted = txns.slice().sort(function(a,b){ return new Date(b.date)-new Date(a.date); });
+  const rows = sorted.map(function(t){
     return '<div class="lot-row"><span>' + t.date + '</span><span>' + t.action + '</span>' +
       '<span>' + (t.quantity!==undefined&&t.quantity!==null?t.quantity:'-') + '</span>' +
       '<span>' + (t.price!==undefined&&t.price!==null?fmtMoney(Number(t.price), t.trade_currency):'-') + '</span>' +
@@ -1153,49 +1140,20 @@ function toggleCard(i){
   document.querySelectorAll('.card').forEach(function(c){ c.classList.remove('expanded'); });
   if(!was) card.classList.add('expanded');
 }
-async function toggleOpenCardHistory(i, accountId, assetId){
-  const detailEl = document.getElementById('th-detail-' + i);
-  if(!detailEl) return;
-  const key = accountId + '::' + assetId;
-  const wasOpen = detailEl.classList.contains('expanded');
-  detailEl.classList.toggle('expanded');
-  if(wasOpen){ EXPANDED_OPEN_HISTORY_KEYS.delete(key); return; }
-  EXPANDED_OPEN_HISTORY_KEYS.add(key);
-  const cacheKey = accountId + '::' + assetId;
-  if(CLOSED_TXN_CACHE[cacheKey]){ detailEl.innerHTML = renderTxnRows(CLOSED_TXN_CACHE[cacheKey]); return; }
-  detailEl.innerHTML = '<p class="hint">Loading...</p>';
-  try{
-    const json = await loadData('position_transactions', { asset_id: assetId, account_id: accountId });
-    const txns = (json.transactions || []).slice().sort(function(a,b){ return new Date(b.date)-new Date(a.date); });
-    CLOSED_TXN_CACHE[cacheKey] = txns;
-    detailEl.innerHTML = renderTxnRows(txns);
-  } catch(err){
-    detailEl.innerHTML = '<p class="hint">Could not load transaction history: ' + err.message + '</p>';
-  }
-}
 function restoreExpandedHistoryPanels(){
-  // Runs after every renderTickerCards() rebuild - re-applies expand state and
-  // any already-cached transaction content by key, so an open history panel
-  // survives a filter keystroke or the 5-min auto-poll instead of silently
-  // collapsing without any visible error.
+  // Runs after every renderTickerCards() rebuild - re-applies which closed card
+  // was expanded, by stable key, since the whole section gets rebuilt fresh on
+  // every filter keystroke and every 5-min auto-poll. Content itself needs no
+  // restoring anymore - it's already present in the freshly-built HTML.
   if(EXPANDED_CLOSED_KEY){
     const idx = CLOSED_LIST_CACHE.findIndex(function(h){ return (h.account_id+'::'+h.asset_id) === EXPANDED_CLOSED_KEY; });
     if(idx>=0){
       const card = document.getElementById('cc-'+idx);
-      const detailEl = document.getElementById('cc-detail-'+idx);
       if(card) card.classList.add('expanded');
-      if(detailEl && CLOSED_TXN_CACHE[EXPANDED_CLOSED_KEY]) detailEl.innerHTML = renderTxnRows(CLOSED_TXN_CACHE[EXPANDED_CLOSED_KEY]);
     } else {
       EXPANDED_CLOSED_KEY = null; // no longer in the filtered/sorted list - nothing to restore
     }
   }
-  EXPANDED_OPEN_HISTORY_KEYS.forEach(function(key){
-    const el = document.querySelector('[data-history-key="' + key + '"]');
-    if(el){
-      el.classList.add('expanded');
-      if(CLOSED_TXN_CACHE[key]) el.innerHTML = renderTxnRows(CLOSED_TXN_CACHE[key]);
-    }
-  });
 }
 function renderAll(){ renderGoalAndPace(); renderFiltersAndRings(); renderTickerCards(); }
 function buildAppShell(){
