@@ -134,7 +134,7 @@
   .region-svg path{cursor:pointer;transition:opacity .15s ease, transform .15s ease;transform-origin:center;}
   .region-svg path.dim{opacity:.22;}
   .region-svg path.selected{transform:scale(1.04);stroke:var(--text);stroke-width:1.5;}
-  .rl-row.selected .rl-val{font-weight:700;color:var(--text);}
+  .rl-row.selected .rl-val{font-weight:800;font-size:11.5px;color:var(--gold-bright);}
   .region-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none;}
   .region-center .v{font-family:var(--serif);font-size:14px;font-weight:600;}
   .region-center .k{font-size:7.5px;color:var(--text-faint);}
@@ -152,7 +152,7 @@
   .donut-svg path{cursor:pointer;transition:opacity .15s ease, transform .15s ease;transform-origin:center;}
   .donut-svg path.dim{opacity:.22;}
   .donut-svg path.selected{transform:scale(1.045);stroke:var(--text);stroke-width:1.5;}
-  .legend-row.selected .legend-val{font-weight:700;color:var(--text);}
+  .legend-row.selected .legend-val{font-weight:800;font-size:10.5px;color:var(--gold-bright);}
   .donut-center{position:relative;}
   .donut-center-label{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;}
   .donut-center-label .v{font-family:var(--serif);font-size:11px;font-weight:600;}
@@ -512,9 +512,16 @@ function renderTrajectoryChart(currentValue, target){
   const paceWindowLabel = effectivePaceStart > startDate ? ('last ' + paceWindowMonths + 'mo') : 'since ' + startDate.toLocaleDateString(undefined,{month:'short',year:'numeric'});
 
   function project(monthlyAmt, months){
-    const r = targetCagr/12; let v = currentValue; const series=[v];
-    for(let i=1;i<=months;i++){ v = v*(1+r)+monthlyAmt; series.push(v); if(v>=goalAmount) return {series:series, hitMonth:i}; }
-    return {series:series, hitMonth:null};
+    const r = targetCagr/12; let v = currentValue; const series=[v]; let hitMonth = null;
+    for(let i=1;i<=months;i++){
+      v = v*(1+r)+monthlyAmt; series.push(v);
+      if(hitMonth===null && v>=goalAmount) hitMonth = i; // record first crossing, but KEEP compounding past it -
+                                                          // returning early here was the actual bug: it made the
+                                                          // series simply stop existing past the goal, so the faster
+                                                          // line couldn't be drawn any further even though real money
+                                                          // keeps compounding past $1M in reality.
+    }
+    return {series:series, hitMonth:hitMonth};
   }
   function etaLabel(hitMonth){
     if(hitMonth===null || hitMonth===undefined) return 'beyond 20yr window';
@@ -545,8 +552,8 @@ function renderTrajectoryChart(currentValue, target){
   const deployedPoints = deployedBuys.map(function(t){ deployedCum += Number(t.base_currency_amount); return {m: (new Date(t.date)-inceptionDate)/(1000*60*60*24*30), v: deployedCum}; });
   const deployedPath = deployedPoints.length ? ('M'+toX(0)+' '+toY(0)+' '+deployedPoints.map(function(p){ return 'L'+toX(p.m)+' '+toY(p.v); }).join(' ')+' L'+toX(monthsFromInceptionToToday)+' '+toY(deployedCum)) : '';
 
-  const goldPath = goldProj.series.slice(0,(goldProj.hitMonth||monthsMax)+1).map(function(v,i){ return (i===0?'M':'L')+toX(monthsFromInceptionToToday+i)+' '+toY(v); }).join(' ');
-  const bluePath = blueProj.series.slice(0,(blueProj.hitMonth||monthsMax)+1).map(function(v,i){ return (i===0?'M':'L')+toX(monthsFromInceptionToToday+i)+' '+toY(v); }).join(' ');
+  const goldPath = goldProj.series.slice(0, monthsMax+1).map(function(v,i){ return (i===0?'M':'L')+toX(monthsFromInceptionToToday+i)+' '+toY(v); }).join(' ');
+  const bluePath = blueProj.series.slice(0, monthsMax+1).map(function(v,i){ return (i===0?'M':'L')+toX(monthsFromInceptionToToday+i)+' '+toY(v); }).join(' ');
   // Tick density adapts to the FULL span (history + projection) so a long
   // inception-to-goal horizon doesn't crowd, and a short one doesn't look empty.
   const yearTicks = [];
@@ -787,7 +794,7 @@ function renderRegionRing(allData){
   const r = computeRendered('region', allData);
   const selected = r.rendered.find(function(s){ return s.isSelected; });
   const centerVal = selected ? selected.value : r.total;
-  const centerLbl = selected ? (selected.label + ' - ' + Math.round(selected.pct*100) + '%') : (filterChain.length?'Subset':'Total');
+  const centerLbl = selected ? selected.label : (filterChain.length?'Subset':'Total');
   const paths = r.rendered.map(function(s){ return '<path d="' + arcPath(52,52,46,30,s.startAngle,s.endAngle) + '" fill="' + resolveColor(s.color) + '" class="' + (s.isSelected?'selected':'') + ' ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'region\',\'' + s.label + '\')"></path>'; }).join('');
   const legend = r.rendered.map(function(s){ return '<div class="rl-row ' + (s.isDimmed?'dim':'') + (s.isSelected?' selected':'') + '" onclick="onSliceClick(\'region\',\'' + s.label + '\')"><span class="rl-sw" style="background:' + resolveColor(s.color) + '"></span><span class="rl-label">' + s.label + '</span><span class="rl-val">' + maskable(fmtUsd(s.value)) + ' - ' + Math.round(s.pct*100) + '%</span></div>'; }).join('');
   return '<div class="region-card"><div class="region-title">BY REGION</div><div class="region-body"><div class="region-ring"><svg class="region-svg" width="104" height="104" viewBox="0 0 104 104">' + paths + '</svg><div class="region-center" id="region-center"><div class="v">' + maskable(fmtUsd(centerVal)) + '</div><div class="k">' + centerLbl + '</div></div></div><div class="region-legend">' + legend + '</div></div></div>';
@@ -796,9 +803,8 @@ function renderDonut(dim, title, allData){
   const r = computeRendered(dim, allData);
   const centerId = 'donut-center-' + dim;
   const selected = r.rendered.find(function(s){ return s.isSelected; });
-  const selectedLocalStr = selected ? sliceLocalStr(dim, selected.label, allData) : '';
   const centerVal = selected ? selected.value : r.total;
-  const centerLbl = selected ? (selected.label + ' - ' + Math.round(selected.pct*100) + '%' + (selectedLocalStr?(' ('+maskable(selectedLocalStr)+')'):'')) : (filterChain.length?'Subset':'Total');
+  const centerLbl = selected ? selected.label : (filterChain.length?'Subset':'Total');
   const paths = r.rendered.map(function(s){
     return '<path d="' + arcPath(40,40,32,20,s.startAngle,s.endAngle) + '" fill="' + resolveColor(s.color) + '" class="' + (s.isSelected?'selected':'') + ' ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'' + dim + '\',\'' + s.label + '\')"></path>';
   }).join('');
