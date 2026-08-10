@@ -249,7 +249,30 @@ let CONFIG = {};
 // figures, since that's the "what do I actually hold right now" view. Toggling
 // on blends cash balances and historical realized P/L back in everywhere.
 let excludeCashAndClosed = true;
+let openSortBy = 'positionSize';
+function tickerCompare(a,b){ return String(a.asset_id||'').localeCompare(String(b.asset_id||'')); }
+// Shared by both open-positions and closed-positions sort dropdowns, so the two
+// always offer identical options and behave identically for the same choice.
+function sortComparator(sortBy){
+  const capOrder = {Large:0,Mid:1,Small:2,NA:3};
+  return function(a,b){
+    switch(sortBy){
+      case 'broker': { const ba=accountBroker(a.account_id), bb=accountBroker(b.account_id); return ba===bb ? tickerCompare(a,b) : ba.localeCompare(bb); }
+      case 'currency': { return a.currency===b.currency ? tickerCompare(a,b) : String(a.currency||'').localeCompare(String(b.currency||'')); }
+      case 'ticker': return tickerCompare(a,b);
+      case 'assetType': { const at=String(a.classification||''), bt=String(b.classification||''); return at===bt ? tickerCompare(a,b) : at.localeCompare(bt); }
+      case 'companySize': { const av=capOrder[a.market_cap_segment]!==undefined?capOrder[a.market_cap_segment]:9, bv=capOrder[b.market_cap_segment]!==undefined?capOrder[b.market_cap_segment]:9; return av===bv?tickerCompare(a,b):av-bv; }
+      case 'date': { const ad=closedDateFor(a), bd=closedDateFor(b); return (bd?bd.getTime():0)-(ad?ad.getTime():0); }
+      case 'positionSize': default: { const av=(a.market_value_estimated!==undefined?a.market_value_estimated:a.market_value_base)||0, bv=(b.market_value_estimated!==undefined?b.market_value_estimated:b.market_value_base)||0; return bv-av; }
+    }
+  };
+}
+function sortOptionsHtml(current){
+  const opts = [['positionSize','Position size'],['broker','Broker'],['currency','Currency'],['ticker','Ticker'],['assetType','Asset type'],['companySize','Company size'],['date','Date']];
+  return opts.map(function(o){ return '<option value="' + o[0] + '"' + (current===o[0]?' selected':'') + '>' + o[1] + '</option>'; }).join('');
+}
 function toggleExcludeCashClosed(){ excludeCashAndClosed = !excludeCashAndClosed; renderAll(); }
+function setOpenSort(v){ openSortBy = v; renderTickerCards(); }
 let FULLSCREEN_CELEBRATION_SHOWN = false;
 function isoDateStr(d){ return d.toISOString().slice(0,10); }
 function defaultClosedFilter(){
@@ -906,7 +929,7 @@ function renderTickerCards(){
   // (some sold, some still held) - CalcEngine already computes their realized
   // gain correctly, this just widens what the section shows.
   const closed = allData.filter(function(h){ return h.quantity === 0 || Math.abs(h.realized_gain_base||0) > 1e-9; });
-  const sorted = open.slice().sort(function(a,b){ return ((b.market_value_estimated||b.market_value_base)||0) - ((a.market_value_estimated||a.market_value_base)||0); });
+  const sorted = open.slice().sort(sortComparator(openSortBy));
   const cardsHtml = sorted.map(function(h,i){
     const dayDir = h.day_gain_pct==null ? 'flat' : h.day_gain_pct>0 ? 'up' : h.day_gain_pct<0 ? 'down' : 'flat';
     const dayStr = h.day_gain_pct==null ? '-' : (h.day_gain_pct>0?'+':'') + h.day_gain_pct.toFixed(2) + '%';
@@ -996,8 +1019,7 @@ function renderTickerCards(){
       '<button class="refresh-btn" onclick="setClosedRangePreset(\'ly\')">Last Year</button>' +
       '<button class="refresh-btn" onclick="setClosedRangePreset(\'inception\')">Since Inception</button>' +
       '<span class="hint" style="align-self:center;margin-left:8px;">Sort:</span>' +
-      '<button class="refresh-btn" id="closed-sort-date-btn" onclick="setClosedSort(\'date\')">Date</button>' +
-      '<button class="refresh-btn" id="closed-sort-broker-btn" onclick="setClosedSort(\'broker\')">Broker</button>' +
+      '<select id="closed-filter-sort" onchange="setClosedSort(this.value)" class="price-edit-input" style="font-size:9px;">' + sortOptionsHtml(closedFilter.sortBy) + '</select>' +
       '</div>'
     ) : '') +
     '<div id="closed-results"></div>' +
@@ -1022,23 +1044,12 @@ function renderClosedResultsOnly(){
     if(fromDate && cd && cd < fromDate) return false;
     if(toDate && cd && cd > toDate) return false;
     return true;
-  }).sort(function(a,b){
-    if(closedFilter.sortBy === 'broker'){
-      const ba = accountBroker(a.account_id), bb = accountBroker(b.account_id);
-      return ba===bb ? (b.realized_gain_base||0)-(a.realized_gain_base||0) : ba.localeCompare(bb);
-    }
-    const da = closedDateFor(a), db = closedDateFor(b);
-    return (db?db.getTime():0) - (da?da.getTime():0);
-  });
+  }).sort(sortComparator(closedFilter.sortBy));
   CLOSED_LIST_CACHE = closedFilteredList;
   const closedTotal = closedFilteredList.reduce(function(s,h){ return s+(h.realized_gain_base||0); },0);
   const filtersActive = !!(closedFilter.ticker || closedFilter.broker || closedFilter.from || closedFilter.to);
   const clearBtn = document.getElementById('closed-filter-clear-btn');
   if(clearBtn) clearBtn.style.display = filtersActive ? '' : 'none';
-  const dateBtn = document.getElementById('closed-sort-date-btn');
-  const brokerBtn = document.getElementById('closed-sort-broker-btn');
-  if(dateBtn) dateBtn.className = 'refresh-btn' + (closedFilter.sortBy==='date' ? ' active-sort' : '');
-  if(brokerBtn) brokerBtn.className = 'refresh-btn' + (closedFilter.sortBy==='broker' ? ' active-sort' : '');
   const closedHtml = closedFilteredList.length ? closedFilteredList.map(function(h, ci){
     const localRealized = (h.currency!=='USD' && h.realized_gain_trade_ccy!==null && h.realized_gain_trade_ccy!==undefined)
       ? ' (' + maskable(fmtMoney(h.realized_gain_trade_ccy, h.currency)) + ')' : '';
@@ -1076,6 +1087,7 @@ function syncClosedFilterInputs(){
   const b = document.getElementById('closed-filter-broker'); if(b) b.value = closedFilter.broker;
   const f = document.getElementById('closed-filter-from'); if(f) f.value = closedFilter.from;
   const to = document.getElementById('closed-filter-to'); if(to) to.value = closedFilter.to;
+  const s = document.getElementById('closed-filter-sort'); if(s) s.value = closedFilter.sortBy;
 }
 // Lines up matching tickers under the filter input as each letter is typed -
 // built from the actual closed/partial-close list (not a hardcoded symbol set),
@@ -1164,7 +1176,10 @@ function buildAppShell(){
     '<div class="filter-bar" id="filter-bar"><span class="filter-empty" id="filter-text">No filter active</span>' +
     '<button class="filter-clear" id="filter-clear-btn" style="display:none;" onclick="clearFilter()">Clear all</button></div>' +
     '<div id="region-ring-section"></div><div class="donut-grid" id="donut-grid"></div>' +
-    '<p class="section-title">HOLDINGS</p><div id="cards-section"></div><div id="closed-section"></div>' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin:18px 0 10px;">' +
+    '<p class="section-title" style="margin:0;">HOLDINGS</p>' +
+    '<select id="open-sort-select" onchange="setOpenSort(this.value)" class="price-edit-input" style="font-size:9px;">' + sortOptionsHtml(openSortBy) + '</select>' +
+    '</div><div id="cards-section"></div><div id="closed-section"></div>' +
     '<p class="hint">Live from your Sheet. Auto-refreshes every 5 min. Refresh button triggers a real price fetch (up to a minute).</p>';
 }
 function attachLots(lots){ HOLDINGS.forEach(function(h){ h.lots = lots.filter(function(l){ return l.account_id===h.account_id && l.asset_id===h.asset_id; }); }); }
