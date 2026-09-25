@@ -1,1265 +1,303 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Portfolio Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --bg:#09080B; --surface:#121116; --surface-2:#17161C;
-    --border:#232129; --border-soft:#1B1A20;
-    --text:#F2EFE9; --text-dim:#A6A3AE; --text-faint:#7A7886;
-    --gold:#C9A227; --gold-bright:#DFC15A; --gold-dim:#6B5A20;
-    --blue:#4F8FE8; --green:#35C48C; --orange:#E2883D; --purple:#B98FE0;
-    --teal:#2DBFAE; --rose:#D67AB1; --red:#E2596B; --gray:#5B6774;
-    --serif:'Playfair Display', serif;
-    --mono:'IBM Plex Mono', monospace;
-  }
-  *{box-sizing:border-box;}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--mono);padding:36px 16px 90px;min-height:100vh;}
-  .wrap{max-width:640px;margin:0 auto;}
-  .page-title{font-size:11px;letter-spacing:.12em;color:var(--text-faint);margin-bottom:4px;}
-  .refresh-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;gap:10px;}
-  .page-sub{font-size:10.5px;color:var(--text-faint);margin:0;}
-  .refresh-btn{font-family:var(--mono);font-size:10px;color:var(--gold-bright);background:none;border:1px solid var(--border);
-    border-radius:6px;padding:6px 12px;cursor:pointer;flex:none;}
-  .refresh-btn:disabled{opacity:.5;cursor:default;}
-  .loading, .error-box{text-align:center;padding:60px 20px;color:var(--text-dim);}
-  .error-box{color:var(--red);border:1px solid var(--red);border-radius:10px;background:rgba(226,89,106,.06);}
-  .spinner{width:22px;height:22px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;
-    animation:spin .8s linear infinite;margin:0 auto 14px;}
-  @keyframes spin{to{transform:rotate(360deg);}}
-  .goal-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:12px;padding:22px 20px;margin-bottom:14px;position:relative;}
-  .toggle-row{display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:14px;}
-  .toggle-switch{width:30px;height:16px;border-radius:9px;background:var(--border);position:relative;flex-shrink:0;transition:background .15s;}
-  .toggle-switch.on{background:var(--blue);}
-  .toggle-knob{position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--text);transition:left .15s;}
-  .toggle-switch.on .toggle-knob{left:16px;}
-  .toggle-lbl{font-size:10px;color:var(--text-faint);}
-  .active-sort{border-color:var(--blue) !important;color:var(--blue) !important;}
-  .privacy-btn{position:absolute;top:14px;right:16px;background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:6px;font-size:9px;padding:4px 8px;cursor:pointer;font-family:var(--mono);}
-  .privacy-btn:hover{border-color:var(--gold);}
-  .goal-flex{display:flex;gap:18px;align-items:center;}
-  .ring-wrap{position:relative;width:140px;height:140px;flex:none;}
-  .ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
-  .rc-eyebrow{font-size:8px;letter-spacing:.12em;color:var(--text-faint);}
-  .rc-value{font-family:var(--serif);font-size:18px;font-weight:600;margin:4px 0 2px;}
-  .rc-return{font-size:11px;font-weight:600;margin-bottom:2px;}
-  .rc-return.up{color:var(--green);} .rc-return.down{color:var(--red);}
-  .rc-pct{font-size:9px;color:var(--gold-bright);font-family:var(--serif);font-style:italic;}
-  .goal-detail{flex:1;min-width:0;}
-  .gd-row{display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);padding:4px 0;border-bottom:1px solid var(--border-soft);}
-  .gd-row:last-child{border-bottom:none;}
-  .gd-row .k{color:var(--text-faint);}
-  .gd-row .v{font-weight:500;}
-  .gd-row .v.loss{color:var(--red);}
-  .eta-strip{display:flex;justify-content:space-between;margin-top:14px;padding-top:13px;border-top:1px solid var(--border);}
-  .eta-block{text-align:center;flex:1;}
-  .eta-eyebrow{font-size:7.5px;letter-spacing:.1em;color:var(--text-faint);margin-bottom:3px;}
-  .eta-value{font-family:var(--serif);font-size:16px;color:var(--text);}
-  .eta-value.target{color:var(--gold-bright);}
-  .pace-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:12px;padding:18px 20px 14px;margin-bottom:14px;}
-  .pace-title{font-size:10px;letter-spacing:.1em;color:var(--text-faint);margin-bottom:16px;}
-  .track-wrap{position:relative;height:34px;margin-bottom:6px;}
-  .track{position:absolute;top:14px;left:0;right:0;height:6px;background:var(--border);border-radius:3px;}
-  .track-fill{position:absolute;top:0;left:0;height:6px;border-radius:3px;background:linear-gradient(90deg, var(--blue), #7BB3F5);}
-  .milestone{position:absolute;top:12px;width:9px;height:9px;border-radius:50%;background:var(--bg);border:2px solid var(--border);transform:translateX(-50%);}
-  .milestone.passed{border-color:var(--gold);background:var(--gold);}
-  .milestone-flagpole{position:absolute;top:-8px;width:1.5px;height:20px;background:var(--border);transform:translateX(-50%);}
-  .milestone-flagpole.passed{background:var(--text-dim);}
-  .milestone-flag{position:absolute;top:-8px;width:11px;height:8px;transform:translateX(1px);
-    clip-path:polygon(0 0,100% 25%,0 50%);opacity:.4;}
-  .milestone-flag.passed{opacity:1;box-shadow:0 0 4px currentColor;}
-  .milestone-label{position:absolute;top:24px;font-size:8px;color:var(--text-faint);transform:translateX(-50%);white-space:nowrap;}
-  .runner-marker{position:absolute;top:-9px;width:22px;height:22px;border-radius:50%;background:var(--blue);border:3px solid var(--bg);
-    box-shadow:0 0 0 2px var(--blue),0 0 10px rgba(79,143,232,.5);transform:translateX(-50%);display:flex;align-items:center;justify-content:center;}
-  .runner-marker svg{width:12px;height:12px;color:#08131F;}
-  .finish-flag{position:absolute;top:8px;right:-3px;width:9px;height:16px;
-    background:repeating-conic-gradient(var(--text) 0 25%, var(--bg) 0 50%) 0 0/6px 6px;
-    border-radius:1px;box-shadow:0 0 0 1px var(--border);}
-  .celebrate-burst{position:absolute;top:50%;left:50%;width:4px;height:8px;border-radius:1px;
-    opacity:0;animation:celebrate-pop 1.6s ease-out infinite;pointer-events:none;}
-  @keyframes celebrate-pop{
-    0%{opacity:0;transform:translate(-50%,-50%) rotate(0deg);}
-    10%{opacity:1;}
-    100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) rotate(220deg);}
-  }
-  .fullscreen-celebrate{position:fixed;inset:0;z-index:9999;pointer-events:none;overflow:hidden;}
-  .fs-flash{position:absolute;inset:0;background:radial-gradient(circle at 50% 40%, rgba(223,193,90,.35), transparent 60%);
-    animation:fs-flash-fade 1s ease-out forwards;}
-  @keyframes fs-flash-fade{0%{opacity:0;}15%{opacity:1;}100%{opacity:0;}}
-  .fs-confetti{position:absolute;top:-20px;width:7px;height:13px;border-radius:1px;opacity:0;
-    animation-name:fs-confetti-fall;animation-timing-function:ease-in;animation-fill-mode:forwards;}
-  @keyframes fs-confetti-fall{
-    0%{opacity:0;transform:translateY(0) rotate(0deg);}
-    8%{opacity:1;}
-    100%{opacity:0;transform:translateY(100vh) rotate(360deg);}
-  }
-  .capital-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
-  .capital-title{font-size:10px;letter-spacing:.1em;color:var(--text-faint);margin-bottom:12px;}
-  .pool-detail{max-height:0;overflow:hidden;transition:max-height .2s ease;}
-  .pool-detail.expanded{max-height:200px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border-soft);}
-  .pool-detail-row{display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);padding:3px 0;}
-  .capital-pools{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-  .pool-box{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:9px;padding:12px;}
-  .pool-label{font-size:9px;letter-spacing:.06em;color:var(--text-faint);margin-bottom:6px;}
-  .pool-value{font-family:var(--serif);font-size:16px;font-weight:600;}
-  .pool-value.neg{color:var(--red);}
-  .pool-sub{font-size:9px;color:var(--text-faint);margin-top:4px;line-height:1.5;}
-  .chart-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:12px;padding:16px 18px 12px;margin-bottom:14px;}
-  .chart-title{font-size:10px;letter-spacing:.1em;color:var(--text-faint);margin-bottom:2px;}
-  .chart-sub{font-size:9px;color:var(--text-faint);margin-bottom:10px;}
-  .chart-legend{display:flex;gap:14px;margin-top:6px;font-size:8.5px;color:var(--text-faint);flex-wrap:wrap;}
-  .chart-legend span{display:inline-flex;align-items:center;gap:4px;}
-  .chart-sw{width:11px;height:2px;display:inline-block;}
-  .chart-tooltip{position:absolute;z-index:500;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:6px;
-    padding:7px 10px;font-size:10px;font-family:var(--mono);pointer-events:none;opacity:0;transition:opacity .08s;white-space:nowrap;}
-  .chart-tooltip .ct-date{color:var(--text-faint);font-size:9px;margin-bottom:4px;}
-  .chart-tooltip .ct-row{display:flex;align-items:center;gap:5px;color:var(--text-dim);}
-  .chart-tooltip .ct-sw{width:8px;height:8px;border-radius:2px;display:inline-block;}
-  .breadcrumb{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
-  .crumb{display:flex;align-items:center;gap:5px;font-size:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;padding:3px 7px;color:var(--text-dim);}
-  .crumb button{background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:11px;padding:0;}
-  .crumb-arrow{color:var(--text-faint);font-size:10px;}
-  .filter-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--surface);border:1px solid var(--border-soft);border-radius:9px;padding:9px 13px;margin-bottom:14px;font-size:10.5px;color:var(--text-dim);}
-  .filter-bar.active{border-color:var(--gold);}
-  .filter-clear{font-family:var(--mono);font-size:10px;font-weight:600;color:var(--gold-bright);background:none;border:none;cursor:pointer;}
-  .filter-empty{color:var(--text-faint);}
-  .region-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:11px;padding:16px 18px;margin-bottom:10px;}
-  .region-title{font-size:10px;letter-spacing:.1em;color:var(--text-faint);margin-bottom:12px;}
-  .region-body{display:flex;align-items:center;gap:16px;}
-  .region-ring{position:relative;width:104px;height:104px;flex:none;}
-  .region-svg path{cursor:pointer;transition:opacity .15s ease, transform .15s ease;transform-origin:center;}
-  .region-svg path.dim{opacity:.22;}
-  .region-svg path.selected{transform:scale(1.04);stroke:var(--text);stroke-width:1.5;}
-  .rl-row.selected .rl-val{font-weight:800;font-size:11.5px;color:var(--gold-bright);}
-  .region-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none;}
-  .region-center .v{font-family:var(--serif);font-size:14px;font-weight:600;}
-  .region-center .k{font-size:7.5px;color:var(--text-faint);}
-  .region-legend{flex:1;display:flex;flex-direction:column;gap:7px;min-width:0;}
-  .rl-row{display:flex;align-items:center;gap:7px;cursor:pointer;font-size:10.5px;transition:opacity .15s ease;}
-  .rl-row.dim{opacity:.35;}
-  .rl-sw{width:8px;height:8px;border-radius:2px;flex:none;}
-  .rl-label{flex:1;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .rl-val{font-family:var(--mono);color:var(--text-faint);font-size:9.5px;}
-  .donut-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
-  @media (max-width:460px){.donut-grid{grid-template-columns:1fr;}}
-  .donut-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:10px;padding:14px;}
-  .donut-title{font-size:9px;letter-spacing:.08em;color:var(--text-faint);margin-bottom:10px;}
-  .donut-body{display:flex;align-items:center;gap:10px;}
-  .donut-svg path{cursor:pointer;transition:opacity .15s ease, transform .15s ease;transform-origin:center;}
-  .donut-svg path.dim{opacity:.22;}
-  .donut-svg path.selected{transform:scale(1.045);stroke:var(--text);stroke-width:1.5;}
-  .legend-row.selected .legend-val{font-weight:800;font-size:10.5px;color:var(--gold-bright);}
-  .donut-center{position:relative;}
-  .donut-center-label{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;}
-  .donut-center-label .v{font-family:var(--serif);font-size:11px;font-weight:600;}
-  .donut-center-label .k{font-size:6px;color:var(--text-faint);}
-  .legend-list{display:flex;flex-direction:column;gap:5px;flex:1;min-width:0;}
-  .legend-row{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:9.5px;transition:opacity .15s ease;}
-  .legend-row.dim{opacity:.35;}
-  .legend-sw{width:7px;height:7px;border-radius:2px;flex:none;}
-  .legend-label{flex:1;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .legend-val{font-family:var(--mono);color:var(--text-faint);font-size:9px;}
-  .section-title{font-size:10px;letter-spacing:.1em;color:var(--text-faint);margin:18px 0 10px;}
-  .card{background:var(--surface);border:1px solid var(--border-soft);border-radius:9px;margin-bottom:6px;overflow:hidden;}
-  .card:hover{border-color:var(--border);}
-  .card.expanded{border-color:var(--blue);}
-  .row{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;user-select:none;}
-  .left-col{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;}
-  .ticker-line{display:flex;align-items:baseline;gap:6px;}
-  .ticker{font-family:var(--mono);font-weight:600;font-size:13px;}
-  .qty{font-family:var(--mono);font-size:10px;color:var(--text-faint);}
-  .quality-num{font-family:var(--mono);font-size:9.5px;font-weight:600;padding:0 4px;border-radius:3px;}
-  .q-high{background:rgba(53,196,140,.12);color:var(--green);}
-  .q-mid{background:rgba(226,136,61,.12);color:var(--orange);}
-  .q-low{background:rgba(226,89,106,.12);color:var(--red);}
-  .name{font-size:10px;color:var(--text-faint);}
-  .right-col{display:flex;flex-direction:column;align-items:flex-end;gap:1px;flex:none;min-width:100px;}
-  .mkt-value{font-family:var(--mono);font-size:13px;font-weight:600;}
-  .mkt-value.estimated{color:var(--orange);}
-  .local-value{font-family:var(--mono);font-size:9px;color:var(--text-faint);}
-  .price-edit-row{display:flex;gap:8px;align-items:center;margin:10px 0 12px;flex-wrap:wrap;}
-  .price-edit-input{font-family:var(--mono);font-size:10px;background:var(--surface);color:var(--text);
-    border:1px solid var(--border);border-radius:6px;padding:6px 8px;width:130px;}
-  .gain-lines{display:flex;flex-direction:column;align-items:flex-end;gap:1px;margin-top:2px;}
-  .gain-line{display:flex;align-items:center;gap:4px;font-size:9px;}
-  .gain-lbl{color:var(--text-faint);font-size:7.5px;}
-  .change{font-family:var(--mono);}
-  .change.up{color:var(--green);}
-  .change.down{color:var(--red);}
-  .change.flat{color:var(--text-faint);}
-  .stale-badge{font-size:8px;padding:1px 5px;border-radius:3px;background:rgba(226,89,106,.12);color:var(--red);margin-top:2px;}
-  .chevron{color:var(--text-faint);font-size:9px;flex:none;transition:transform .15s ease;}
-  .card.expanded .chevron{transform:rotate(180deg);}
-  .panel{border-top:1px solid var(--border-soft);padding:12px 14px;display:none;background:var(--surface-2);}
-  .card.expanded .panel{display:block;}
-  .meta-line{font-size:9.5px;font-family:var(--mono);color:var(--text-faint);margin-bottom:10px;line-height:1.6;}
-  .txn-history-label{font-size:9.5px;color:var(--text-faint);margin-top:8px;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;}
-  .lot-row{display:grid;grid-template-columns:1.1fr .7fr .9fr .8fr 1fr;gap:6px;padding:5px 0;border-bottom:1px solid var(--border-soft);
-    font-family:var(--mono);font-size:9.5px;align-items:center;}
-  .lot-row:last-child{border-bottom:none;}
-  .lot-row.head{color:var(--text-faint);font-size:8px;text-transform:uppercase;font-weight:600;}
-  .lot-gl{display:flex;align-items:center;gap:3px;justify-content:flex-end;}
-  .lot-gl.up{color:var(--green);}
-  .lot-gl.down{color:var(--red);}
-  .lot-term{font-size:8px;padding:1px 4px;border-radius:3px;}
-  .lot-term.ltcg{background:rgba(53,196,140,.1);color:var(--green);}
-  .lot-term.stcg{background:rgba(226,136,61,.1);color:var(--orange);}
-  .closed-row{display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--border-soft);
-    border-radius:9px;padding:9px 14px;margin-bottom:6px;font-size:10px;color:var(--text-dim);}
-  .closed-row b{font-family:var(--mono);color:var(--text);}
-  .closed-filters{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;}
-  .ticker-suggest{position:absolute;top:100%;left:0;z-index:50;min-width:100%;max-height:160px;overflow-y:auto;
-    background:var(--surface-2);border:1px solid var(--border-soft);border-radius:6px;margin-top:2px;display:none;}
-  .ticker-suggest.show{display:block;}
-  .ticker-suggest-row{padding:6px 10px;font-size:11px;font-family:var(--mono);cursor:pointer;white-space:nowrap;}
-  .ticker-suggest-row:hover{background:var(--surface);}
-  .closed-card{margin-bottom:6px;}
-  .closed-card .closed-row{margin-bottom:0;border-radius:9px 9px 0 0;}
-  .closed-card:not(.expanded) .closed-row{border-radius:9px;}
-  .closed-detail-panel{display:none;padding:8px 10px 4px;background:var(--surface-2);border:1px solid var(--border-soft);border-top:none;border-radius:0 0 9px 9px;}
-  .closed-card.expanded .closed-detail-panel{display:block;}
-  .closed-detail-panel.expanded{display:block;margin-top:6px;border-radius:9px;border-top:1px solid var(--border-soft);}
-  .closed-section-card{margin-top:8px;}
-  .closed-section-body{display:none;padding-top:10px;}
-  .closed-section-card.expanded .closed-section-body{display:block;}
-  .hint{font-size:10px;color:var(--text-faint);margin-top:18px;line-height:1.6;}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <p class="page-title">PORTFOLIO OVERVIEW</p>
-  <div class="refresh-row">
-    <p class="page-sub" id="asof-line">Loading...</p>
-    <button class="refresh-btn" id="refresh-btn" onclick="fullLoad(true)">Refresh prices</button>
-  </div>
-  <div id="app">
-    <div class="loading"><div class="spinner"></div>Fetching live holdings...</div>
-  </div>
-</div>
-<script>
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxXmRugzGUz47znt34cT4CR13ZtwOau8ZhFe8YO9KT3ittvuuWFWlh-4sHgZbnDlpqRTw/exec';
-let HOLDINGS = [], ACCOUNTS = [], TARGETS = [], TRANSACTIONS = [], filterChain = [], valuesHidden = false;
-let CONFIG = {};
-// Master toggle for the totals ring + every pie + the holdings list beneath -
-// default EXCLUDES cash and closed-position realized gains from headline
-// figures, since that's the "what do I actually hold right now" view. Toggling
-// on blends cash balances and historical realized P/L back in everywhere.
-let excludeCashAndClosed = true;
-let openSortBy = 'positionSize';
-function tickerCompare(a,b){ return String(a.asset_id||'').localeCompare(String(b.asset_id||'')); }
-// Shared by both open-positions and closed-positions sort dropdowns, so the two
-// always offer identical options and behave identically for the same choice.
-function sortComparator(sortBy){
-  const capOrder = {Mega:0,Large:1,Medium:2,Small:3,Micro:4,NA:5};
-  return function(a,b){
-    switch(sortBy){
-      case 'broker': { const ba=accountBroker(a.account_id), bb=accountBroker(b.account_id); return ba===bb ? tickerCompare(a,b) : ba.localeCompare(bb); }
-      case 'currency': { return a.currency===b.currency ? tickerCompare(a,b) : String(a.currency||'').localeCompare(String(b.currency||'')); }
-      case 'ticker': return tickerCompare(a,b);
-      case 'assetType': { const at=String(a.classification||''), bt=String(b.classification||''); return at===bt ? tickerCompare(a,b) : at.localeCompare(bt); }
-      case 'companySize': { const av=capOrder[a.market_cap_segment]!==undefined?capOrder[a.market_cap_segment]:9, bv=capOrder[b.market_cap_segment]!==undefined?capOrder[b.market_cap_segment]:9; return av===bv?tickerCompare(a,b):av-bv; }
-      case 'date': { const ad=closedDateFor(a), bd=closedDateFor(b); return (bd?bd.getTime():0)-(ad?ad.getTime():0); }
-      case 'positionSize': default: { const av=(a.market_value_estimated!==undefined?a.market_value_estimated:a.market_value_base)||0, bv=(b.market_value_estimated!==undefined?b.market_value_estimated:b.market_value_base)||0; return bv-av; }
-    }
-  };
-}
-function sortOptionsHtml(current){
-  const opts = [['positionSize','Position size'],['broker','Broker'],['currency','Currency'],['ticker','Ticker'],['assetType','Asset type'],['companySize','Company size'],['date','Date']];
-  return opts.map(function(o){ return '<option value="' + o[0] + '"' + (current===o[0]?' selected':'') + '>' + o[1] + '</option>'; }).join('');
-}
-function toggleExcludeCashClosed(){ excludeCashAndClosed = !excludeCashAndClosed; renderAll(); }
-function setOpenSort(v){ openSortBy = v; renderTickerCards(); }
-let FULLSCREEN_CELEBRATION_SHOWN = false;
-function isoDateStr(d){ return d.toISOString().slice(0,10); }
-function defaultClosedFilter(){
-  const today = new Date();
-  const monthAgo = new Date(today); monthAgo.setMonth(monthAgo.getMonth()-1);
-  return {ticker:'', from: isoDateStr(monthAgo), to: isoDateStr(today), sortBy:'date', broker:''};
-}
-let closedFilter = defaultClosedFilter();
-function setClosedRangePreset(preset){
-  const today = new Date();
-  if(preset==='ytd'){
-    closedFilter.from = isoDateStr(new Date(today.getFullYear(),0,1)); closedFilter.to = isoDateStr(today);
-  } else if(preset==='ly'){
-    closedFilter.from = isoDateStr(new Date(today.getFullYear()-1,0,1)); closedFilter.to = isoDateStr(new Date(today.getFullYear()-1,11,31));
-  } else if(preset==='inception'){
-    const inceptionStr = CONFIG.portfolio_inception;
-    closedFilter.from = inceptionStr ? String(inceptionStr).slice(0,10) : isoDateStr(new Date(today.getFullYear()-20,0,1));
-    closedFilter.to = isoDateStr(today);
-  }
-  syncClosedFilterInputs();
-  renderClosedResultsOnly();
-}
-function setClosedSort(by){ closedFilter.sortBy = by; renderClosedResultsOnly(); }
-function toggleValues(){ valuesHidden = !valuesHidden; renderAll(); }
-function maskable(str){ return valuesHidden ? '*****' : str; }
-function accountBroker(accountId){ const a = ACCOUNTS.find(x => x.account_id === accountId); return a ? a.broker : accountId; }
-function activeTarget(){
-  const today = new Date();
-  const sorted = TARGETS.slice().sort((a,b) => new Date(a.effective_date) - new Date(b.effective_date));
-  let active = sorted[0];
-  sorted.forEach(t => { if(new Date(t.effective_date) <= today) active = t; });
-  return active;
-}
-function indianGroup(intDigits){
-  if(intDigits.length <= 3) return intDigits;
-  const lastThree = intDigits.slice(-3);
-  const rest = intDigits.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ',');
-  return rest + ',' + lastThree;
-}
-function fmtIndian(v, maxFrac){
-  const neg = v < 0;
-  const fixed = Math.abs(v).toFixed(maxFrac===undefined?2:maxFrac);
-  const parts = fixed.split('.');
-  return (neg?'-':'') + indianGroup(parts[0]) + (parts[1] && Number(parts[1])>0 ? '.' + parts[1] : '');
-}
-function fmtMoney(v, ccy){
-  if(v === null || v === undefined) return '-';
-  const sym = ccy === 'INR' ? 'Rs ' : ccy === 'AED' ? 'AED ' : ccy === 'USD' ? '$' : '';
-  // INR uses the Indian numbering system (lakh/crore - last 3 digits, then groups
-  // of 2, e.g. 12,34,567) rather than the Western 3-digit grouping.
-  const numStr = ccy === 'INR' ? fmtIndian(v, 2) : Math.abs(v).toLocaleString(undefined, {maximumFractionDigits:2});
-  return sym + numStr + (v<0 && ccy!=='INR' ? ' (neg)':'');
-}
-function fmtUsd(v){ if(v === null || v === undefined) return '-'; return '$' + v.toLocaleString(undefined, {maximumFractionDigits:0}); }
+/**
+ * WebApp.gs
+ * ------------------------------------------------------------
+ * The bridge between everything built so far and an actual
+ * dashboard. Deploying this as a Web App (Deploy -> Manage
+ * deployments -> New version) gives you a URL that returns real
+ * holdings data as JSON, and now also accepts the two actions the
+ * ticker-card edit button needs.
+ *
+ * doGet handles both reads (?action=holdings etc) and the write
+ * actions the dashboard needs - kept as GET/query-param calls (not
+ * a separate doPost) to match the existing thin, single-file style,
+ * since this is a personal single-user tool with no auth layer.
+ * Kept deliberately thin - it just calls the same tested
+ * functions everything else uses, never duplicates logic.
+ *
+ * Now also routes the Add Transaction form's actions (get_accounts_
+ * for_form, get_all_assets_for_form, get_held_assets_for_account,
+ * get_current_quantity, get_fx_rate_for_form, create_transaction) -
+ * these call straight through to CreateTransaction.gs, same
+ * "thin router, no duplicated logic" rule as everything else here.
+ * Same pattern for the watchlist actions (get_watchlist,
+ * add_watchlist_item, remove_watchlist_item), routed straight
+ * through to Watchlist.gs.
+ *
+ * CACHING: the 'holdings' action (which the dashboard's initial
+ * load and every 5-min auto-poll call) is now backed by a short
+ * CacheService TTL, so repeat loads within that window return
+ * instantly instead of re-running the full FIFO lot-matching
+ * engine over 800+ transactions every single time. Every action
+ * that actually CHANGES data (refresh, set_manual_price,
+ * resume_auto_fetch, create_transaction) invalidates the cache
+ * first, so nothing ever serves stale data after a real change -
+ * caching only saves work on repeat reads of UNCHANGED data.
+ * ------------------------------------------------------------
+ */
+const HOLDINGS_CACHE_KEY = 'holdings_payload_v1';
+const HOLDINGS_CACHE_TTL_SECONDS = 180; // 3 min - shorter than the 5-min auto-poll,
+                                          // so most poll cycles still get a fresh
+                                          // compute, but rapid repeat loads (opening
+                                          // the dashboard in two tabs, a quick
+                                          // reload) hit cache instead of recomputing.
 
-function renderGoalAndPace(){
-  const target = activeTarget();
-  const includeCash = !excludeCashAndClosed;
-  const includeClosedGain = !excludeCashAndClosed;
-  // "Positions" count always means current open non-cash holdings regardless of
-  // the toggle - that's a simple inventory count, not a value/gain rollup, so it
-  // shouldn't flicker between two different meanings as the toggle flips.
-  const nonCash = HOLDINGS.filter(h => !String(h.asset_id).startsWith('CASH-') && h.quantity > 0);
-  // Toggle-respecting base set for VALUE and GAIN: cash rows included only when
-  // the toggle is off. Market value already comes out to ~0 for fully-closed
-  // positions on its own (quantity 0), so the toggle only needs to separately
-  // gate whether REALIZED gain (closed/partial-close history) counts toward the
-  // headline gain figure - a partial close's still-open portion always counts.
-  // Now respects the SAME filterChain the pies below use (fullyFiltered - no
-  // dim excluded, unlike the pies which exclude their own dim so you can still
-  // click between siblings). Selecting a broker/region/etc slice below now
-  // narrows the headline total/gain/% to just that subset too, not only the
-  // sub-pies - the two were disconnected before.
-  const baseData = fullyFiltered(HOLDINGS.filter(h => includeCash || !String(h.asset_id).startsWith('CASH-')));
-  const knownValue = baseData.reduce((s,h) => s + (h.market_value_estimated!==undefined ? (h.market_value_estimated||0) : (h.market_value_base||0)), 0);
-  const totalGainBase = baseData.reduce((s,h) => s + (h.unrealized_gain_base||0) + (includeClosedGain ? (h.realized_gain_base||0) : 0), 0);
-  const dayGainBase = baseData.reduce((s,h) => s + (h.day_gain_base||0), 0);
-  // % return ties out exactly with the two dollar figures shown alongside it -
-  // cost basis derived as value-minus-gain rather than a separate aggregation,
-  // so the percentage can never silently disagree with the totals next to it.
-  const costBasisImplied = knownValue - totalGainBase;
-  const totalGainPct = costBasisImplied > 0 ? (totalGainBase/costBasisImplied*100) : null;
-  // Simple annualized version of the same total-return % - NOT a true XIRR (that
-  // needs cash-flow-weighted timing across every individual contribution, which
-  // is what CALCULATE_RETURNS will eventually do). This is a rough
-  // "if this % return had compounded evenly since day one" figure, honestly
-  // labeled as such rather than presented as a real money-weighted return.
-  let annualizedPct = null;
-  if(totalGainPct!==null && CONFIG.portfolio_inception){
-    const daysSinceInception = (new Date() - new Date(CONFIG.portfolio_inception)) / (1000*60*60*24);
-    if(daysSinceInception > 30 && (1+totalGainPct/100) > 0){
-      annualizedPct = (Math.pow(1+totalGainPct/100, 365.25/daysSinceInception) - 1) * 100;
-    }
+function getCachedHoldingsPayload_() {
+  try {
+    const cached = CacheService.getScriptCache().get(HOLDINGS_CACHE_KEY);
+    return cached ? JSON.parse(cached) : null;
+  } catch (e) {
+    return null; // cache read failing should never break the dashboard - fall through to a fresh compute
   }
-  const estimatedPositions = nonCash.filter(h => h.is_estimated);
-  const goalAmount = target ? Number(target.goal_amount_usd) : null;
-  const targetDate = target ? target.target_date : null;
-  const targetCagr = target ? Number(target.target_cagr) : null;
-  const monthly = target ? Number(target.monthly_contribution_usd) : null;
-  const pct = goalAmount ? (knownValue/goalAmount*100) : 0;
-  const milestonePcts = [12.5, 25, 50, 100];
+}
+function setCachedHoldingsPayload_(payload) {
+  try {
+    CacheService.getScriptCache().put(HOLDINGS_CACHE_KEY, JSON.stringify(payload), HOLDINGS_CACHE_TTL_SECONDS);
+  } catch (e) {
+    // CacheService rejects values over 100KB - if the holdings payload ever grows
+    // past that (a lot more lots/holdings down the line), just skip caching that
+    // round rather than erroring the whole request. Always-fresh is a safe fallback.
+    Logger.log('Holdings payload too large to cache (or cache write failed): ' + e.message);
+  }
+}
+function invalidateHoldingsCache_() {
+  try { CacheService.getScriptCache().remove(HOLDINGS_CACHE_KEY); } catch (e) { /* nothing to do if this fails - TTL will still expire it */ }
+}
 
-  document.getElementById('goal-section').innerHTML =
-    '<div class="goal-card">' +
-      '<button class="privacy-btn" onclick="toggleValues()">' + (valuesHidden?'show':'hide') + '</button>' +
-      '<div class="toggle-row" onclick="toggleExcludeCashClosed()">' +
-        '<div class="toggle-switch ' + (excludeCashAndClosed?'':'on') + '"><div class="toggle-knob"></div></div>' +
-        '<span class="toggle-lbl">' + (excludeCashAndClosed ? 'Excluding cash + closed P/L - tap to include' : 'Including cash + closed P/L - tap to exclude') + '</span>' +
-      '</div>' +
-      '<div class="goal-flex">' +
-        '<div class="ring-wrap"><svg width="140" height="140" viewBox="0 0 140 140" style="transform:rotate(-90deg)">' +
-          '<circle cx="70" cy="70" r="60" fill="none" stroke="#1E1C24" stroke-width="7"/>' +
-          '<circle cx="70" cy="70" r="60" fill="none" stroke="#4F8FE8" stroke-width="7" stroke-dasharray="' + (Math.min(pct,100)/100*2*Math.PI*60).toFixed(1) + ' 10000" stroke-linecap="round"/>' +
-        '</svg><div class="ring-center"><div class="rc-eyebrow">' + (filterChain.length ? filterChain.map(f=>f.value).join(' + ') : 'PORTFOLIO') + '</div><div class="rc-value">' + maskable(fmtUsd(knownValue)) + '</div>' +
-        (totalGainPct!==null ? '<div class="rc-return ' + (totalGainPct>=0?'up':'down') + '">' + (totalGainPct>=0?'+':'') + totalGainPct.toFixed(1) + '% all-time</div>' : '') +
-        '<div class="rc-pct">' + (goalAmount ? pct.toFixed(1)+'% of '+maskable(fmtUsd(goalAmount)) : 'no active target') + '</div></div></div>' +
-        '<div class="goal-detail"><div class="gd-row"><span class="k">Positions</span><span class="v">' + nonCash.length + '</span></div>' +
-        '<div class="gd-row"><span class="k">At cost (no live price)</span><span class="v ' + (estimatedPositions.length?'loss':'') + '">' + estimatedPositions.length + '</span></div>' +
-        '<div class="gd-row"><span class="k">Total Gain</span><span class="change ' + (totalGainBase>=0?'up':'down') + '">' + (totalGainBase>=0?'+':'-') + maskable(fmtUsd(Math.abs(totalGainBase))) + (totalGainPct!==null ? ' (' + (totalGainPct>=0?'+':'') + totalGainPct.toFixed(1) + '%)' : '') + '</span></div>' +
-        (annualizedPct!==null ? '<div class="gd-row"><span class="k">Annualized (approx.)</span><span class="change ' + (annualizedPct>=0?'up':'down') + '">' + (annualizedPct>=0?'+':'') + annualizedPct.toFixed(1) + '%/yr</span></div>' : '') +
-        '<div class="gd-row"><span class="k">Today\'s Gain</span><span class="change ' + (dayGainBase>=0?'up':'down') + '">' + (dayGainBase>=0?'+':'-') + maskable(fmtUsd(Math.abs(dayGainBase))) + '</span></div></div>' +
-      '</div>' +
-      (target ?
-        '<div class="eta-strip"><div class="eta-block"><div class="eta-eyebrow">TARGET DATE</div><div class="eta-value target">' + new Date(targetDate).getFullYear() + '</div></div>' +
-        '<div class="eta-block"><div class="eta-eyebrow">TARGET CAGR</div><div class="eta-value">' + targetCagr + '%</div></div>' +
-        '<div class="eta-block"><div class="eta-eyebrow">MONTHLY PLAN</div><div class="eta-value">' + maskable(fmtUsd(monthly)) + '</div></div></div>'
-        : '<p class="hint" style="margin-top:12px;">No active row in <b>targets</b>.</p>') +
-      (estimatedPositions.length ? '<p class="hint" style="margin-top:10px;">At-cost positions (' + estimatedPositions.map(function(p){return p.asset_id;}).join(', ') + ') use purchase price, not a live value.</p>' : '') +
-    '</div>';
+const TXNS_CACHE_KEY = 'transactions_payload_v1';
+const TXNS_CACHE_TTL_SECONDS = 180; // same window as holdings - both change together (a new transaction affects both)
+function getCachedTransactionsPayload_() {
+  try {
+    const cached = CacheService.getScriptCache().get(TXNS_CACHE_KEY);
+    return cached ? JSON.parse(cached) : null;
+  } catch (e) { return null; }
+}
+function setCachedTransactionsPayload_(payload) {
+  try { CacheService.getScriptCache().put(TXNS_CACHE_KEY, JSON.stringify(payload), TXNS_CACHE_TTL_SECONDS); }
+  catch (e) { Logger.log('Transactions payload too large to cache (or cache write failed): ' + e.message); }
+}
+function invalidateTransactionsCache_() {
+  try { CacheService.getScriptCache().remove(TXNS_CACHE_KEY); } catch (e) { /* TTL will still expire it */ }
+}
 
-  // Milestones are at real 12.5/25/50/100% of goal - visually those bunch together
-  // (12.5->25 is a 12.5-wide gap, 50->100 is a 50-wide gap) since raw % literally
-  // sets track position. Map real % to an EQUALLY-SPACED visual position instead
-  // (0/12.5/25/50/100 -> 0/25/50/75/100), piecewise-linear within each segment, so
-  // the posts sit evenly apart while their labels keep showing the true percentage.
-  // The fill bar and runner marker use the same mapping so they stay visually
-  // aligned with the posts along the same (nonlinear) track scale.
-  function milestoneVisualPct(realPct){
-    const stops = [{r:0,v:0},{r:12.5,v:25},{r:25,v:50},{r:50,v:75},{r:100,v:100}];
-    const clamped = Math.max(0, Math.min(100, realPct));
-    for(let i=0;i<stops.length-1;i++){
-      const a=stops[i], b=stops[i+1];
-      if(clamped>=a.r && clamped<=b.r){
-        const frac = (b.r===a.r) ? 0 : (clamped-a.r)/(b.r-a.r);
-        return a.v + frac*(b.v-a.v);
+const RETURNS_CACHE_KEY = 'returns_payload_v1';
+const RETURNS_CACHE_TTL_SECONDS = 900; // 15 min - a return % doesn't need to track live price ticks
+function getCachedReturnsPayload_() {
+  try {
+    const cached = CacheService.getScriptCache().get(RETURNS_CACHE_KEY);
+    return cached ? JSON.parse(cached) : null;
+  } catch (e) { return null; }
+}
+function setCachedReturnsPayload_(payload) {
+  try { CacheService.getScriptCache().put(RETURNS_CACHE_KEY, JSON.stringify(payload), RETURNS_CACHE_TTL_SECONDS); }
+  catch (e) { Logger.log('Returns payload too large to cache (or cache write failed): ' + e.message); }
+}
+function invalidateReturnsCache_() {
+  try { CacheService.getScriptCache().remove(RETURNS_CACHE_KEY); } catch (e) { /* TTL will still expire it */ }
+}
+
+// Actions that CHANGE data - blocked entirely for the family (read-only) key,
+// enforced here on the server, never just hidden in the dashboard UI. Anyone
+// calling the URL directly with a family key still can't trigger any of these.
+const WRITE_ACTIONS = ['refresh', 'set_manual_price', 'resume_auto_fetch', 'create_transaction', 'add_watchlist_item', 'remove_watchlist_item'];
+
+/**
+ * Checks e.parameter.key against config.access_key_owner / access_key_family
+ * (stored in the Sheet, same "single source of truth" pattern as everything
+ * else - rotate a key by editing one cell, no code redeploy needed). Returns
+ * { ok, level, error } - level is 'owner' or 'family', used below to gate
+ * WRITE_ACTIONS. If neither config key is set yet, the gate is OPEN (returns
+ * ok:true, level:'owner') so this can be deployed without instantly locking
+ * out the dashboard - fill in both config rows to actually turn the gate on.
+ */
+function checkAccessKey_(e) {
+  const ownerKey = getConfigValue('access_key_owner', null);
+  const familyKey = getConfigValue('access_key_family', null);
+  if (!ownerKey && !familyKey) {
+    return { ok: true, level: 'owner' }; // gate not configured yet - see note above
+  }
+  const provided = e && e.parameter && e.parameter.key;
+  if (!provided) return { ok: false, error: 'Access key required.' };
+  if (ownerKey && provided === ownerKey) return { ok: true, level: 'owner' };
+  if (familyKey && provided === familyKey) return { ok: true, level: 'family' };
+  return { ok: false, error: 'Invalid access key.' };
+}
+
+function doGet(e) {
+  const action = (e && e.parameter && e.parameter.action) || 'holdings';
+
+  const access = checkAccessKey_(e);
+  if (!access.ok) {
+    return jsonResponse({ error: access.error }, 401);
+  }
+  if (access.level === 'family' && WRITE_ACTIONS.indexOf(action) !== -1) {
+    return jsonResponse({ error: 'This key is read-only - ' + action + ' is not permitted.' }, 403);
+  }
+
+  try {
+    let payload;
+    if (action === 'holdings') {
+      const cached = getCachedHoldingsPayload_();
+      if (cached) {
+        payload = cached;
+      } else {
+        const result = CALCULATE_HOLDINGS();
+        payload = {
+          asOfDate: result.asOfDate,
+          holdingsSummary: result.holdingsSummary,
+          holdingsLots: result.holdingsLots,
+          warnings: result.warnings,
+        };
+        setCachedHoldingsPayload_(payload);
       }
-    }
-    return 100;
-  }
-  const visualPct = milestoneVisualPct(pct);
-  // Celebration is proximity-based, not a hard crossing-trigger: if the current
-  // value sits within $2,000 of ANY milestone's dollar amount (checked once per
-  // load), a short confetti burst plays around the runner marker itself - not a
-  // separate element. Deliberately a band, not a point, since price moves day to
-  // day and a point-trigger would flicker on/off across refreshes near the line.
-  const NEAR_MILESTONE_BAND_USD = 2000;
-  const nearMilestone = goalAmount && milestonePcts.some(function(m){
-    return Math.abs(knownValue - goalAmount*m/100) <= NEAR_MILESTONE_BAND_USD;
-  });
-  const burstColors = ['var(--gold-bright)','var(--blue)','var(--green)','var(--rose)'];
-  const burstHtml = nearMilestone ? burstColors.map(function(c,i){
-    const angle = (i/burstColors.length)*2*Math.PI + 0.4;
-    const dx = Math.round(Math.cos(angle)*20), dy = Math.round(Math.sin(angle)*20-14);
-    return '<div class="celebrate-burst" style="background:' + c + ';--dx:' + dx + 'px;--dy:' + dy + 'px;animation-delay:' + (i*0.12) + 's;"></div>';
-  }).join('') : '';
-  // Full-screen flash is a ONE-TIME, ~1s event per session (not per render) -
-  // the small burst around the runner marker above is the ongoing/repeating
-  // decoration; this is the bigger "you hit a milestone" moment, guarded so it
-  // doesn't re-fire on every 5-min poll or filter click while still in the band.
-  if(nearMilestone && !FULLSCREEN_CELEBRATION_SHOWN){
-    FULLSCREEN_CELEBRATION_SHOWN = true;
-    triggerFullscreenCelebration();
-  }
-  document.getElementById('pace-section').innerHTML =
-    '<div class="pace-card"><div class="pace-title">PROGRESS TO GOAL - milestones at 12.5/25/50/100% of goal_amount_usd, evenly spaced for readability</div>' +
-    '<div class="track-wrap"><div class="track"><div class="track-fill" style="width:' + visualPct + '%"></div></div>' +
-    milestonePcts.map(function(m,mi){ const p = pct>=m?'passed':''; const flagColor = ['#2DBFAE','#4F8FE8','#B98FE0','#DFC15A'][mi]; return '<div class="milestone-flagpole ' + p + '" style="left:' + milestoneVisualPct(m) + '%"></div><div class="milestone-flag ' + p + '" style="left:' + milestoneVisualPct(m) + '%;background:' + flagColor + ';color:' + flagColor + ';"></div><div class="milestone ' + p + '" style="left:' + milestoneVisualPct(m) + '%"></div><div class="milestone-label" style="left:' + milestoneVisualPct(m) + '%">' + m + '%</div>'; }).join('') +
-    '<div class="finish-flag"></div>' +
-    '<div class="runner-marker" style="left:' + visualPct + '%"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/></svg>' + burstHtml + '</div>' +
-    '</div></div>';
-
-  renderCapitalCard();
-  renderTrajectoryChart(knownValue, target);
-  renderContributionChart(target);
-}
-
-function renderCapitalCard(){
-  const cash = HOLDINGS.filter(function(h){ return String(h.asset_id).startsWith('CASH-'); });
-  const usdAedRows = cash.filter(function(h){ return h.currency==='USD' || h.currency==='AED'; });
-  const inrRows = cash.filter(function(h){ return h.currency==='INR'; });
-  const usdAedPool = usdAedRows.reduce(function(s,h){ return s+(h.market_value_base||0); },0);
-  const inrPool = inrRows.reduce(function(s,h){ return s+(h.market_value_base||0); },0);
-  function poolDetailRows(rows){
-    return rows.map(function(h){
-      const localStr = h.currency!=='USD' ? ' (' + maskable(fmtMoney(h.market_value_trade_ccy||0, h.currency)) + ')' : '';
-      return '<div class="pool-detail-row"><span>' + accountBroker(h.account_id) + ' - ' + h.currency + '</span><span>' + maskable(fmtUsd(h.market_value_base||0)) + localStr + '</span></div>';
-    }).join('') || '<p class="hint">No balances in this pool.</p>';
-  }
-  document.getElementById('capital-section').innerHTML =
-    '<div class="capital-card"><div class="capital-title">DEPLOYABLE CAPITAL</div><div class="capital-pools">' +
-    '<div class="pool-box" onclick="togglePoolDetail(\'usdAed\')" style="cursor:pointer;"><div class="pool-label">USD + AED (fungible)</div><div class="pool-value ' + (usdAedPool<0?'neg':'') + '">' + maskable(fmtUsd(usdAedPool)) + '</div>' +
-    '<div class="pool-sub">Funded by monthly plan. Convertible at a nominal fee. Tap for breakdown.</div>' +
-    '<div class="pool-detail" id="pool-detail-usdAed">' + poolDetailRows(usdAedRows) + '</div></div>' +
-    '<div class="pool-box" onclick="togglePoolDetail(\'inr\')" style="cursor:pointer;"><div class="pool-label">INR (separate)</div><div class="pool-value ' + (inrPool<0?'neg':'') + '">' + maskable(fmtUsd(inrPool)) + '</div>' +
-    '<div class="pool-sub">No fresh contributions - only moves via India transactions. Tap for breakdown.</div>' +
-    '<div class="pool-detail" id="pool-detail-inr">' + poolDetailRows(inrRows) + '</div></div>' +
-    '</div></div>';
-}
-function togglePoolDetail(key){
-  const el = document.getElementById('pool-detail-' + key);
-  if(el) el.classList.toggle('expanded');
-}
-// Brief, self-removing full-screen flash for the "you hit a milestone" moment -
-// bigger and louder than the small ongoing runner-marker burst, but still short
-// per the project's established "settles quickly" tone, not a persistent overlay.
-function triggerFullscreenCelebration(){
-  const colors = ['#DFC15A','#4F8FE8','#35C48C','#D67AB1','#B98FE0','#E2883D'];
-  const pieces = [];
-  for(let i=0;i<24;i++){
-    const left = Math.round(Math.random()*100);
-    const delay = (Math.random()*0.3).toFixed(2);
-    const dur = (1.0 + Math.random()*0.5).toFixed(2);
-    const color = colors[i % colors.length];
-    pieces.push('<div class="fs-confetti" style="left:' + left + '%;background:' + color + ';animation-delay:' + delay + 's;animation-duration:' + dur + 's;"></div>');
-  }
-  const el = document.createElement('div');
-  el.className = 'fullscreen-celebrate';
-  el.innerHTML = '<div class="fs-flash"></div>' + pieces.join('');
-  document.body.appendChild(el);
-  setTimeout(function(){ el.remove(); }, 1300);
-}
-
-function renderTrajectoryChart(currentValue, target){
-  if(!target){ document.getElementById('trajectory-section').innerHTML=''; return; }
-  const goalAmount = Number(target.goal_amount_usd);
-  const plannedMonthly = Number(target.monthly_contribution_usd);
-  const targetCagr = Number(target.target_cagr)/100;
-
-  // Real contribution pace, blended into the ETA projection instead of treating the
-  // trajectory and CONTRIBUTION PACE chart as two disconnected things. Uses a
-  // TRAILING window (last 12 months, or the full history if the target is younger
-  // than that) rather than averaging since the target's effective_date - the plan
-  // stepped up across four tiers ($500/1000/2000/3000 per mo), so a since-inception
-  // average would badly dilute the current, more realistic pace with years of the
-  // older lower amounts. 12 months (widened from an initial 6) balances staying
-  // responsive to real step-ups against not over-reacting to any single unusually
-  // light or heavy month.
-  // NOTE: a real trailing window will also pick up one-time capital (e.g. a loan)
-  // the same as ongoing contributions - worth knowing if a lump sum lands inside
-  // this window, since it can temporarily inflate this figure beyond what's
-  // actually sustainable month to month.
-  // The return RATE still uses target_cagr for both lines - a real trailing return
-  // (XIRR) is CALCULATE_RETURNS, a separate not-yet-built piece (bucket D) - only
-  // the contribution side of the projection is upgraded here.
-  const startDate = new Date(target.effective_date);
-  const today = new Date();
-  const paceWindowMonths = 12;
-  const paceWindowStart = new Date(today); paceWindowStart.setMonth(paceWindowStart.getMonth()-paceWindowMonths);
-  const effectivePaceStart = paceWindowStart > startDate ? paceWindowStart : startDate;
-  const paceMonthsElapsed = Math.max(1, (today-effectivePaceStart)/(1000*60*60*24*30));
-  const recentContributed = TRANSACTIONS.filter(function(t){ return t.action==='BUY' && new Date(t.date) >= effectivePaceStart && t.base_currency_amount; })
-    .reduce(function(s,t){ return s+Number(t.base_currency_amount); },0);
-  const actualMonthlyPace = paceMonthsElapsed > 0 ? recentContributed/paceMonthsElapsed : plannedMonthly;
-  const paceWindowLabel = effectivePaceStart > startDate ? ('last ' + paceWindowMonths + 'mo') : 'since ' + startDate.toLocaleDateString(undefined,{month:'short',year:'numeric'});
-
-  function project(monthlyAmt, months){
-    const r = targetCagr/12; let v = currentValue; const series=[v]; let hitMonth = null;
-    for(let i=1;i<=months;i++){
-      v = v*(1+r)+monthlyAmt; series.push(v);
-      if(hitMonth===null && v>=goalAmount) hitMonth = i; // record first crossing, but KEEP compounding past it -
-                                                          // returning early here was the actual bug: it made the
-                                                          // series simply stop existing past the goal, so the faster
-                                                          // line couldn't be drawn any further even though real money
-                                                          // keeps compounding past $1M in reality.
-    }
-    return {series:series, hitMonth:hitMonth};
-  }
-  function etaLabel(hitMonth){
-    if(hitMonth===null || hitMonth===undefined) return 'beyond 20yr window';
-    const d = new Date(); d.setMonth(d.getMonth()+hitMonth);
-    return d.toLocaleDateString(undefined, {month:'short', year:'numeric'});
-  }
-  const goldProj = project(plannedMonthly, 240);
-  const blueProj = project(actualMonthlyPace, 240);
-  const monthsMax = Math.max(goldProj.hitMonth||240, blueProj.hitMonth||240);
-
-  // Chart now spans from real portfolio inception (config.portfolio_inception,
-  // falling back to the target's effective_date if that's missing) through the
-  // projection horizon, on one continuous date-based axis. The pre-today segment
-  // is real cumulative CAPITAL DEPLOYED (cost basis from actual buys) - a true
-  // historical market-value line needs the snapshot backfill, which isn't built
-  // yet, so this is deliberately labeled for what it is rather than faked.
-  const inceptionDate = CONFIG.portfolio_inception ? new Date(CONFIG.portfolio_inception) : startDate;
-  const monthsFromInceptionToToday = Math.max(0, (today-inceptionDate)/(1000*60*60*24*30));
-  const totalSpanMonths = monthsFromInceptionToToday + monthsMax;
-  const W=560,H=158,pad=8,padBottom=22;
-  const maxV = goalAmount*1.05;
-  const toX = function(monthsFromInception){ return pad + (monthsFromInception/totalSpanMonths)*(W-2*pad); };
-  const toY = function(v){ return H-padBottom - (Math.min(v,maxV)/maxV)*(H-pad-padBottom); };
-
-  const deployedBuys = TRANSACTIONS.filter(function(t){ return t.action==='BUY' && new Date(t.date) >= inceptionDate && new Date(t.date) <= today && t.base_currency_amount; })
-    .sort(function(a,b){ return new Date(a.date)-new Date(b.date); });
-  let deployedCum = 0;
-  const deployedPoints = deployedBuys.map(function(t){ deployedCum += Number(t.base_currency_amount); return {m: (new Date(t.date)-inceptionDate)/(1000*60*60*24*30), v: deployedCum}; });
-  const deployedPath = deployedPoints.length ? ('M'+toX(0)+' '+toY(0)+' '+deployedPoints.map(function(p){ return 'L'+toX(p.m)+' '+toY(p.v); }).join(' ')+' L'+toX(monthsFromInceptionToToday)+' '+toY(deployedCum)) : '';
-
-  const goldPath = goldProj.series.slice(0, (goldProj.hitMonth||monthsMax)+1).map(function(v,i){ return (i===0?'M':'L')+toX(monthsFromInceptionToToday+i)+' '+toY(v); }).join(' ');
-  const bluePath = blueProj.series.slice(0, (blueProj.hitMonth||monthsMax)+1).map(function(v,i){ return (i===0?'M':'L')+toX(monthsFromInceptionToToday+i)+' '+toY(v); }).join(' ');
-  // Tick density adapts to the FULL span (history + projection) so a long
-  // inception-to-goal horizon doesn't crowd, and a short one doesn't look empty.
-  const yearTicks = [];
-  const tickStepYears = totalSpanMonths <= 120 ? 1 : 2;
-  for(let yr=inceptionDate.getFullYear(); yr<=today.getFullYear()+Math.ceil(monthsMax/12); yr+=tickStepYears){
-    const m = (new Date(yr,0,1)-inceptionDate)/(1000*60*60*24*30);
-    if(m>=0 && m<=totalSpanMonths) yearTicks.push({m:m, year:yr});
-  }
-  document.getElementById('trajectory-section').innerHTML =
-    '<div class="chart-card"><div class="chart-title">TRAJECTORY TO GOAL</div>' +
-    '<div class="chart-sub">From portfolio inception (' + inceptionDate.toLocaleDateString(undefined,{month:'short',year:'numeric'}) + ') - capital deployed through today, compounding curves beyond it</div>' +
-    '<svg id="traj-svg" width="100%" height="158" viewBox="0 0 560 158" preserveAspectRatio="none">' +
-    '<line x1="' + pad + '" y1="' + toY(goalAmount) + '" x2="' + (W-pad) + '" y2="' + toY(goalAmount) + '" stroke="#232129" stroke-width="1" stroke-dasharray="3 3"/>' +
-    yearTicks.map(function(t){ return '<line x1="' + toX(t.m) + '" y1="' + pad + '" x2="' + toX(t.m) + '" y2="' + (H-padBottom) + '" stroke="#1B1A20" stroke-width="1"/>'; }).join('') +
-    '<path d="' + deployedPath + '" fill="none" stroke="#5B6774" stroke-width="2"/>' +
-    '<path d="' + goldPath + '" fill="none" stroke="#C9A227" stroke-width="2" stroke-dasharray="5 3"/>' +
-    '<path d="' + bluePath + '" fill="none" stroke="#4F8FE8" stroke-width="2" stroke-dasharray="5 3"/>' +
-    '<line x1="' + toX(monthsFromInceptionToToday) + '" y1="' + pad + '" x2="' + toX(monthsFromInceptionToToday) + '" y2="' + (H-padBottom) + '" stroke="#7A7886" stroke-width="1" stroke-dasharray="1 2"/>' +
-    '<circle cx="' + toX(monthsFromInceptionToToday) + '" cy="' + toY(currentValue) + '" r="3.5" fill="#F2EFE9"/>' +
-    '<text x="' + (toX(monthsFromInceptionToToday)+6) + '" y="' + (toY(currentValue)-6) + '" fill="#A6A3AE" font-size="9" font-family="IBM Plex Mono">today</text>' +
-    '<text x="' + (W-pad-24) + '" y="' + (toY(goalAmount)-6) + '" fill="#7A7886" font-size="9" font-family="IBM Plex Mono">' + fmtUsd(goalAmount) + '</text>' +
-    '<line x1="' + pad + '" y1="' + (H-padBottom) + '" x2="' + (W-pad) + '" y2="' + (H-padBottom) + '" stroke="#232129" stroke-width="1"/>' +
-    yearTicks.map(function(t){ return '<line x1="' + toX(t.m) + '" y1="' + (H-padBottom) + '" x2="' + toX(t.m) + '" y2="' + (H-padBottom+5) + '" stroke="#A6A3AE" stroke-width="1.2"/>' +
-      '<text x="' + toX(t.m) + '" y="' + (H-padBottom+16) + '" fill="#D7D4CC" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">' + t.year + '</text>'; }).join('') +
-    '</svg><div class="chart-legend">' +
-    '<span><span class="chart-sw" style="background:#5B6774"></span>Capital deployed to date (cost basis, not market value - real history needs snapshot backfill)</span>' +
-    '<span><span class="chart-sw" style="background:repeating-linear-gradient(90deg,#C9A227 0 3px,transparent 3px 5px)"></span>Planned pace (' + fmtUsd(plannedMonthly) + '/mo) - ETA ' + etaLabel(goldProj.hitMonth) + '</span>' +
-    '<span><span class="chart-sw" style="background:repeating-linear-gradient(90deg,#4F8FE8 0 3px,transparent 3px 5px)"></span>Actual pace (' + paceWindowLabel + ', ' + fmtUsd(Math.round(actualMonthlyPace)) + '/mo) - ETA ' + etaLabel(blueProj.hitMonth) + '</span>' +
-    '</div><p class="hint" style="margin-top:6px;">Both projected lines use the target CAGR (' + (targetCagr*100).toFixed(0) + '%) as the return rate - a real trailing return (XIRR) isn\'t computed yet.</p></div>';
-  attachChartCrosshair('traj-svg', {
-    W:W, H:H, pad:pad, padBottom:padBottom,
-    resolve: function(svgX){
-      const mFromInception = ((svgX-pad)/(W-2*pad))*totalSpanMonths;
-      if(mFromInception < 0 || mFromInception > totalSpanMonths) return null;
-      const dateAtM = new Date(inceptionDate); dateAtM.setDate(dateAtM.getDate() + Math.round(mFromInception*30));
-      const dateLabel = dateAtM.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
-      if(mFromInception <= monthsFromInceptionToToday){
-        // Historical side - nearest real capital-deployed point at/before this x.
-        let cum = 0;
-        deployedPoints.forEach(function(p){ if(p.m<=mFromInception) cum = p.v; });
-        return {x:toX(mFromInception), y:toY(cum), dateLabel:dateLabel, lines:[{color:'#5B6774',label:'Deployed',val:fmtUsd(cum)}]};
+    } else if (action === 'refresh') {
+      invalidateHoldingsCache_(); // prices are about to change - never serve the old cached payload after this
+      REFRESH_PRICES();
+      const result = CALCULATE_HOLDINGS();
+      payload = {
+        asOfDate: result.asOfDate,
+        holdingsSummary: result.holdingsSummary,
+        holdingsLots: result.holdingsLots,
+        warnings: result.warnings,
+        refreshedPrices: true,
+      };
+      setCachedHoldingsPayload_(payload); // this fresh result becomes the new cache too, not just this response
+    } else if (action === 'set_manual_price') {
+      const assetId = e.parameter.asset_id;
+      const price = Number(e.parameter.price);
+      if (!assetId || isNaN(price)) {
+        return jsonResponse({ error: 'set_manual_price requires asset_id and a numeric price' }, 400);
       }
-      const monthsFromToday = Math.round(mFromInception - monthsFromInceptionToToday);
-      const goldDone = goldProj.hitMonth!==null && monthsFromToday > goldProj.hitMonth;
-      const blueDone = blueProj.hitMonth!==null && monthsFromToday > blueProj.hitMonth;
-      const gv = goldProj.series[Math.min(monthsFromToday, goldProj.hitMonth!==null?goldProj.hitMonth:goldProj.series.length-1)];
-      const bv = blueProj.series[Math.min(monthsFromToday, blueProj.hitMonth!==null?blueProj.hitMonth:blueProj.series.length-1)];
-      return {x:toX(mFromInception), y:toY(blueDone?goalAmount:bv), dateLabel:dateLabel, lines:[
-        {color:'#C9A227',label:'Planned',val:goldDone?'Goal reached':fmtUsd(Math.round(gv))},
-        {color:'#4F8FE8',label:'Actual pace',val:blueDone?'Goal reached':fmtUsd(Math.round(bv))}
-      ]};
-    }
-  });
-}
-
-function renderContributionChart(target){
-  if(!TARGETS.length || !TRANSACTIONS.length){ document.getElementById('contribution-section').innerHTML=''; return; }
-  // Contribution-plan start is NOT the same thing as portfolio_inception - that's
-  // the earliest transaction across EVERY broker (Zerodha's 2021 history), while
-  // the monthly contribution plan only exists for the goal-tracking side and
-  // began later. Using portfolio_inception here was the actual bug behind last
-  // round's "staggered" report - fixed by anchoring to the earliest targets row
-  // instead, and reading every row as a real step function rather than a single
-  // flat rate applied across the whole history.
-  const sortedTargets = TARGETS.slice().sort(function(a,b){ return new Date(a.effective_date)-new Date(b.effective_date); });
-  const startDate = new Date(sortedTargets[0].effective_date);
-  const today = new Date();
-  function plannedMonthlyAt(date){
-    let applicable = sortedTargets[0];
-    sortedTargets.forEach(function(t){ if(new Date(t.effective_date)<=date) applicable=t; });
-    return Number(applicable.monthly_contribution_usd);
-  }
-  const buys = TRANSACTIONS.filter(function(t){ return t.action==='BUY' && new Date(t.date) >= startDate && t.base_currency_amount; })
-    .sort(function(a,b){ return new Date(a.date)-new Date(b.date); });
-  const monthsElapsed = Math.max(1, Math.round((today-startDate)/(1000*60*60*24*30)));
-  let cum = 0;
-  const actualPoints = buys.map(function(b){ cum += Number(b.base_currency_amount); return {date:new Date(b.date), value:cum}; });
-  const actualTotal = cum;
-  let plannedCum = 0; const plannedPoints = [];
-  for(let cursor=new Date(startDate); cursor<=today; cursor.setMonth(cursor.getMonth()+1)){
-    plannedCum += plannedMonthlyAt(cursor);
-    plannedPoints.push({date:new Date(cursor), value:plannedCum});
-  }
-  const plannedTotal = plannedCum;
-  const planLabel = sortedTargets.map(function(t){ return fmtUsd(Number(t.monthly_contribution_usd))+'/mo from '+new Date(t.effective_date).getFullYear(); }).join(' -> ');
-  const W=560,H=130,pad=8,padBottom=20;
-  const maxV = Math.max(actualTotal, plannedTotal) * 1.1 || 1;
-  const toX = function(d){ return pad + ((d-startDate)/(today-startDate))*(W-2*pad); };
-  const toY = function(v){ return H-padBottom - (v/maxV)*(H-pad-padBottom); };
-  const actualPath = actualPoints.length ? ('M'+toX(startDate)+' '+toY(0)+' '+actualPoints.map(function(p){ return 'L'+toX(p.date)+' '+toY(p.value); }).join(' ')) : '';
-  const plannedPath = plannedPoints.length ? ('M'+toX(startDate)+' '+toY(0)+' '+plannedPoints.map(function(p){ return 'L'+toX(p.date)+' '+toY(p.value); }).join(' ')) : '';
-  // Tick step adapts to how long the target's been active: monthly when young,
-  // widening to quarterly then yearly so labels never crowd together.
-  const tickStepMonths = monthsElapsed<=8 ? 1 : monthsElapsed<=20 ? 3 : monthsElapsed<=48 ? 6 : 12;
-  const dateTicks = [];
-  for(let m=0; ; m+=tickStepMonths){
-    const d = new Date(startDate); d.setMonth(d.getMonth()+m);
-    if(d>today) break;
-    dateTicks.push(d);
-  }
-  const tickFmt = tickStepMonths>=12 ? {year:'numeric'} : {month:'short',year:'2-digit'};
-  // Regular ticks stay exactly as generated (evenly spaced, true to their own
-  // dates) - never moved. "Today" is only appended as an extra point when its
-  // label would actually differ from the last regular tick's, so the reader
-  // never sees the same year/month label jump position or repeat right next to
-  // itself (the bug that made "2026" look misplaced - the tick WAS getting
-  // snapped onto today's real position, breaking the even rhythm of the years
-  // before it).
-  if(!dateTicks.length || dateTicks[dateTicks.length-1].toLocaleDateString(undefined,tickFmt) !== today.toLocaleDateString(undefined,tickFmt)){
-    dateTicks.push(today);
-  }
-  document.getElementById('contribution-section').innerHTML =
-    '<div class="chart-card"><div class="chart-title">CONTRIBUTION PACE</div>' +
-    '<div class="chart-sub">Cumulative real purchases vs. planned (' + planLabel + ') since ' + startDate.toLocaleDateString() + '</div>' +
-    '<svg id="contrib-svg" width="100%" height="130" viewBox="0 0 560 130" preserveAspectRatio="none">' +
-    dateTicks.map(function(d){ return '<line x1="' + toX(d) + '" y1="' + pad + '" x2="' + toX(d) + '" y2="' + (H-padBottom) + '" stroke="#1B1A20" stroke-width="1"/>'; }).join('') +
-    '<path d="' + plannedPath + '" fill="none" stroke="#7A7886" stroke-width="1.5" stroke-dasharray="4 3"/>' +
-    '<path d="' + actualPath + '" fill="none" stroke="#35C48C" stroke-width="2"/>' +
-    '<line x1="' + pad + '" y1="' + (H-padBottom) + '" x2="' + (W-pad) + '" y2="' + (H-padBottom) + '" stroke="#232129" stroke-width="1"/>' +
-    dateTicks.map(function(d){ return '<line x1="' + toX(d) + '" y1="' + (H-padBottom) + '" x2="' + toX(d) + '" y2="' + (H-padBottom+5) + '" stroke="#A6A3AE" stroke-width="1.2"/>' +
-      '<text x="' + toX(d) + '" y="' + (H-padBottom+14) + '" fill="#D7D4CC" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">' + d.toLocaleDateString(undefined,tickFmt) + '</text>'; }).join('') +
-    '</svg><div class="chart-legend">' +
-    '<span><span class="chart-sw" style="background:#35C48C"></span>Actual: ' + fmtUsd(actualTotal) + '</span>' +
-    '<span>Planned: ' + fmtUsd(plannedTotal) + '</span></div></div>';
-  attachChartCrosshair('contrib-svg', {
-    W:W, H:H, pad:pad, padBottom:padBottom,
-    resolve: function(svgX){
-      const frac = (svgX-pad)/(W-2*pad);
-      if(frac < 0 || frac > 1) return null;
-      const dateAtX = new Date(startDate.getTime() + frac*(today-startDate));
-      let actualAt = 0;
-      actualPoints.forEach(function(p){ if(p.date<=dateAtX) actualAt = p.value; });
-      let plannedAt = 0;
-      plannedPoints.forEach(function(p){ if(p.date<=dateAtX) plannedAt = p.value; });
-      return {x:svgX, y:toY(actualAt), dateLabel:dateAtX.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}), lines:[
-        {color:'#35C48C',label:'Actual',val:fmtUsd(actualAt)},
-        {color:'#7A7886',label:'Planned',val:fmtUsd(plannedAt)}
-      ]};
-    }
-  });
-}
-
-function polarToCartesian(cx,cy,r,angleDeg){ const a=(angleDeg-90)*Math.PI/180; return {x:cx+r*Math.cos(a), y:cy+r*Math.sin(a)}; }
-// Shared crosshair for both line charts. Creates real SVG line/circle elements
-// once per chart (found by id on repeat calls, not recreated), and a single
-// floating tooltip reused across both charts. Works for mouse AND touch, since
-// touchmove gives the same "find nearest point, show it" behavior phones need -
-// there's no hover state on a phone, so this has to work via direct contact.
-function attachChartCrosshair(svgId, cfg){
-  const svg = document.getElementById(svgId);
-  if(!svg) return;
-  const ns = 'http://www.w3.org/2000/svg';
-  let cl = svg.querySelector('.ch-line'), cd = svg.querySelector('.ch-dot');
-  if(!cl){ cl = document.createElementNS(ns,'line'); cl.setAttribute('class','ch-line'); cl.setAttribute('stroke','#7A7886'); cl.setAttribute('stroke-width','1'); cl.setAttribute('opacity','0'); svg.appendChild(cl); }
-  if(!cd){ cd = document.createElementNS(ns,'circle'); cd.setAttribute('class','ch-dot'); cd.setAttribute('r','3.5'); cd.setAttribute('fill','#F2EFE9'); cd.setAttribute('opacity','0'); svg.appendChild(cd); }
-  function move(clientX, clientY){
-    const rect = svg.getBoundingClientRect();
-    const svgX = ((clientX-rect.left)/rect.width) * cfg.W;
-    const info = cfg.resolve(svgX);
-    if(!info){ cl.setAttribute('opacity','0'); cd.setAttribute('opacity','0'); hideChartTooltip(); return; }
-    cl.setAttribute('x1',info.x); cl.setAttribute('x2',info.x); cl.setAttribute('y1',cfg.pad); cl.setAttribute('y2',cfg.H-cfg.padBottom); cl.setAttribute('opacity','1');
-    cd.setAttribute('cx',info.x); cd.setAttribute('cy',info.y); cd.setAttribute('opacity','1');
-    showChartTooltip(clientX, clientY, info.dateLabel, info.lines);
-  }
-  svg.onmousemove = function(e){ move(e.clientX, e.clientY); };
-  svg.onmouseleave = function(){ cl.setAttribute('opacity','0'); cd.setAttribute('opacity','0'); hideChartTooltip(); };
-  svg.ontouchmove = function(e){ if(e.touches && e.touches[0]){ e.preventDefault(); move(e.touches[0].clientX, e.touches[0].clientY); } };
-  svg.ontouchend = function(){ cl.setAttribute('opacity','0'); cd.setAttribute('opacity','0'); hideChartTooltip(); };
-}
-function getChartTooltipEl(){
-  let el = document.getElementById('chart-tooltip');
-  if(!el){ el = document.createElement('div'); el.id='chart-tooltip'; el.className='chart-tooltip'; document.body.appendChild(el); }
-  return el;
-}
-function showChartTooltip(clientX, clientY, dateLabel, lines){
-  const el = getChartTooltipEl();
-  el.innerHTML = '<div class="ct-date">' + dateLabel + '</div>' + lines.map(function(l){
-    return '<div class="ct-row"><span class="ct-sw" style="background:' + l.color + '"></span>' + l.label + ': <b>' + maskable(l.val) + '</b></div>';
-  }).join('');
-  el.style.left = (clientX+14) + 'px';
-  el.style.top = (clientY-10+window.scrollY) + 'px';
-  el.style.opacity = '1';
-}
-function hideChartTooltip(){
-  const el = document.getElementById('chart-tooltip');
-  if(el) el.style.opacity = '0';
-}
-function arcPath(cx,cy,rOuter,rInner,startAngle,endAngle){
-  const p1=polarToCartesian(cx,cy,rOuter,endAngle), p2=polarToCartesian(cx,cy,rOuter,startAngle);
-  const p3=polarToCartesian(cx,cy,rInner,startAngle), p4=polarToCartesian(cx,cy,rInner,endAngle);
-  const large=endAngle-startAngle>180?1:0;
-  return 'M ' + p1.x + ' ' + p1.y + ' A ' + rOuter + ' ' + rOuter + ' 0 ' + large + ' 0 ' + p2.x + ' ' + p2.y + ' L ' + p3.x + ' ' + p3.y + ' A ' + rInner + ' ' + rInner + ' 0 ' + large + ' 1 ' + p4.x + ' ' + p4.y + ' Z';
-}
-function resolveColor(v){ const el=document.createElement('div'); el.style.color=v; document.body.appendChild(el); const c=getComputedStyle(el).color; document.body.removeChild(el); return c; }
-const DIM_COLORS = {
-  region: {US:'var(--blue)',UAE:'var(--green)',India:'var(--orange)',Crypto:'var(--purple)',Other:'var(--gray)'},
-  currency: {USD:'var(--blue)',AED:'var(--teal)',INR:'var(--rose)'},
-  classification: {Core:'var(--green)',Tactical:'var(--blue)',Hedge:'var(--red)'},
-  cap: {Large:'var(--blue)',Mid:'var(--teal)',Small:'var(--orange)',NA:'var(--gray)'},
-  broker: {}
-};
-function dimValue(h, dim){
-  if(dim==='region') return h.region;
-  if(dim==='currency') return h.currency;
-  if(dim==='classification') return h.classification || 'Unclassified';
-  if(dim==='cap') return h.market_cap_segment || 'NA';
-  if(dim==='broker') return accountBroker(h.account_id);
-  return 'Other';
-}
-function colorFor(dim, label){
-  if(DIM_COLORS[dim][label]) return DIM_COLORS[dim][label];
-  const palette = ['var(--blue)','var(--green)','var(--orange)','var(--purple)','var(--teal)','var(--rose)'];
-  const idx = Object.keys(DIM_COLORS[dim]).length % palette.length;
-  DIM_COLORS[dim][label] = palette[idx]; return DIM_COLORS[dim][label];
-}
-function applyChainExcept(exceptDim, data){ return data.filter(function(h){ return filterChain.every(function(f){ return f.dim===exceptDim ? true : dimValue(h,f.dim)===f.value; }); }); }
-function fullyFiltered(data){ return data.filter(function(h){ return filterChain.every(function(f){ return dimValue(h,f.dim)===f.value; }); }); }
-function aggregate(dim, data){
-  const map = {};
-  data.forEach(function(h){ const label = dimValue(h,dim); map[label] = (map[label]||0) + (h.market_value_estimated!==undefined?(h.market_value_estimated||0):(h.market_value_base||0)); });
-  return Object.entries(map).map(function(e){ return {label:e[0], value:e[1]}; }).sort(function(a,b){ return b.value-a.value; });
-}
-function computeRendered(dim, data){
-  const activeInThisDim = filterChain.find(function(f){ return f.dim===dim; });
-  const baseData = applyChainExcept(dim, data);
-  const slices = aggregate(dim, baseData);
-  const total = slices.reduce(function(s,d){ return s+d.value; },0);
-  let angle=0;
-  const rendered = slices.map(function(s){
-    const pct = total ? s.value/total : 0;
-    const startAngle=angle, endAngle=angle+pct*360; angle=endAngle;
-    return Object.assign({}, s, {startAngle:startAngle, endAngle:endAngle, pct:pct,
-      isSelected: activeInThisDim && activeInThisDim.value===s.label,
-      isDimmed: activeInThisDim && activeInThisDim.value!==s.label,
-      color:colorFor(dim,s.label)});
-  });
-  return {rendered:rendered, total:total, activeInThisDim:activeInThisDim};
-}
-function renderRegionRing(allData){
-  const r = computeRendered('region', allData);
-  const selected = r.rendered.find(function(s){ return s.isSelected; });
-  const centerVal = selected ? selected.value : r.total;
-  const centerLbl = selected ? selected.label : (filterChain.length?'Subset':'Total');
-  const paths = r.rendered.map(function(s){ return '<path d="' + arcPath(52,52,46,30,s.startAngle,s.endAngle) + '" fill="' + resolveColor(s.color) + '" class="' + (s.isSelected?'selected':'') + ' ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'region\',\'' + s.label + '\')"></path>'; }).join('');
-  const legend = r.rendered.map(function(s){ return '<div class="rl-row ' + (s.isDimmed?'dim':'') + (s.isSelected?' selected':'') + '" onclick="onSliceClick(\'region\',\'' + s.label + '\')"><span class="rl-sw" style="background:' + resolveColor(s.color) + '"></span><span class="rl-label">' + s.label + '</span><span class="rl-val">' + maskable(fmtUsd(s.value)) + ' - ' + Math.round(s.pct*100) + '%</span></div>'; }).join('');
-  return '<div class="region-card"><div class="region-title">BY REGION</div><div class="region-body"><div class="region-ring"><svg class="region-svg" width="104" height="104" viewBox="0 0 104 104">' + paths + '</svg><div class="region-center" id="region-center"><div class="v">' + maskable(fmtUsd(centerVal)) + '</div><div class="k">' + centerLbl + '</div></div></div><div class="region-legend">' + legend + '</div></div></div>';
-}
-function renderDonut(dim, title, allData){
-  const r = computeRendered(dim, allData);
-  const centerId = 'donut-center-' + dim;
-  const selected = r.rendered.find(function(s){ return s.isSelected; });
-  const centerVal = selected ? selected.value : r.total;
-  const centerLbl = selected ? selected.label : (filterChain.length?'Subset':'Total');
-  const paths = r.rendered.map(function(s){
-    return '<path d="' + arcPath(40,40,32,20,s.startAngle,s.endAngle) + '" fill="' + resolveColor(s.color) + '" class="' + (s.isSelected?'selected':'') + ' ' + (s.isDimmed?'dim':'') + '" onclick="onSliceClick(\'' + dim + '\',\'' + s.label + '\')"></path>';
-  }).join('');
-  // For the currency breakdown, shows each slice's own-currency total directly.
-  // For broker, shows it too IF that broker only ever holds one currency (true
-  // for Zerodha/AngelOne today, and for any future single-currency broker
-  // automatically - a broker spanning multiple currencies like Wio shows
-  // nothing here rather than a misleading single figure).
-  const legend = r.rendered.map(function(s){
-    const localStr = sliceLocalStr(dim, s.label, allData);
-    const localDisp = localStr ? ' (' + maskable(localStr) + ')' : '';
-    return '<div class="legend-row ' + (s.isDimmed?'dim':'') + (s.isSelected?' selected':'') + '" onclick="onSliceClick(\'' + dim + '\',\'' + s.label + '\')"><span class="legend-sw" style="background:' + resolveColor(s.color) + '"></span><span class="legend-label">' + s.label + '</span><span class="legend-val">' + Math.round(s.pct*100) + '%' + localDisp + '</span></div>';
-  }).join('');
-  return '<div class="donut-card"><div class="donut-title">' + title + '</div><div class="donut-body"><div class="donut-center"><svg class="donut-svg" width="80" height="80" viewBox="0 0 80 80">' + paths + '</svg><div class="donut-center-label" id="' + centerId + '"><div class="v">' + maskable(fmtUsd(centerVal)) + '</div><div class="k">' + centerLbl + '</div></div></div><div class="legend-list">' + legend + '</div></div></div>';
-}
-function sliceLocalStr(dim, label, allData){
-  const baseDataForLocal = applyChainExcept(dim, allData);
-  if(dim==='currency'){
-    if(label==='USD') return '';
-    const localTotal = baseDataForLocal.filter(function(h){ return h.currency===label; }).reduce(function(sum,h){ return sum+(h.market_value_trade_ccy||0); },0);
-    return fmtMoney(localTotal, label);
-  }
-  if(dim==='broker'){
-    const rows = baseDataForLocal.filter(function(h){ return accountBroker(h.account_id)===label; });
-    if(!rows.length) return '';
-    const currencies = Array.from(new Set(rows.map(function(h){ return h.currency; })));
-    if(currencies.length!==1 || currencies[0]==='USD') return ''; // mixed-currency broker, or already USD - nothing extra to show
-    const localTotal = rows.reduce(function(sum,h){ return sum+(h.market_value_trade_ccy||0); },0);
-    return fmtMoney(localTotal, currencies[0]);
-  }
-  return '';
-  return fmtMoney(localTotal, label);
-}
-function onSliceClick(dim, value){
-  const idx = filterChain.findIndex(function(f){ return f.dim===dim; });
-  if(idx>=0){ if(filterChain[idx].value===value) filterChain.splice(idx,1); else filterChain[idx]={dim:dim,value:value}; }
-  else filterChain.push({dim:dim,value:value});
-  renderAll();
-}
-function removeCrumb(i){ filterChain.splice(i,1); renderAll(); }
-function clearFilter(){ filterChain=[]; renderAll(); }
-function renderFiltersAndRings(){
-  const includeCash = !excludeCashAndClosed;
-  // Invested-only set (excludes cash always) - used for region/classification/market
-  // cap, where cash doesn't have a meaningful value (no classification, no cap).
-  const investedData = HOLDINGS.filter(function(h){ return !String(h.asset_id).startsWith('CASH-') && h.quantity > 0; });
-  // Currency and broker exposure legitimately include cash sitting in that
-  // currency/account - now gated on the same master toggle as the totals ring,
-  // rather than being permanently on, so the whole page moves together.
-  const withCashData = HOLDINGS.filter(function(h){
-    const isCash = String(h.asset_id).startsWith('CASH-');
-    return isCash ? includeCash : h.quantity > 0;
-  });
-  const cashSuffix = includeCash ? ' (incl. cash)' : '';
-  document.getElementById('region-ring-section').innerHTML = renderRegionRing(investedData);
-  document.getElementById('donut-grid').innerHTML =
-    renderDonut('currency','BY CURRENCY' + cashSuffix, withCashData) + renderDonut('classification','BY CLASSIFICATION', investedData) +
-    renderDonut('cap','BY MARKET CAP', investedData) + renderDonut('broker','BY BROKER' + cashSuffix, withCashData);
-  document.getElementById('breadcrumb').innerHTML = filterChain.map(function(f,i){ return (i>0?'<span class="crumb-arrow">-></span>':'') + '<span class="crumb">' + f.value + '<button onclick="removeCrumb(' + i + ')">x</button></span>'; }).join('');
-  const bar=document.getElementById('filter-bar'), text=document.getElementById('filter-text'), btn=document.getElementById('filter-clear-btn');
-  if(filterChain.length){
-    const subset = fullyFiltered(investedData);
-    bar.classList.add('active'); text.classList.remove('filter-empty');
-    text.textContent = 'Filtered: ' + maskable(fmtUsd(subset.reduce(function(s,h){ return s+(h.market_value_estimated||h.market_value_base||0); },0))) + ' - ' + subset.length + ' position(s)';
-    btn.style.display='inline-block';
-  } else {
-    bar.classList.remove('active'); text.classList.add('filter-empty');
-    text.textContent = 'No filter active - showing full portfolio'; btn.style.display='none';
-  }
-}
-function qClass(q){ if(q===''||q===null||q===undefined) return 'q-mid'; return q>=7.5?'q-high':q>=5.5?'q-mid':'q-low'; }
-// closedDate comes from CalcEngine's last_transaction_date (cheap, already part
-// of the routine holdings payload) instead of scanning full transaction detail -
-// the full per-position history is fetched lazily, only once a card is actually
-// expanded (see toggleClosedCard). Top-level (not nested) since both
-// renderTickerCards and renderClosedResultsOnly need it.
-function closedDateFor(h){
-  return h.last_transaction_date ? new Date(h.last_transaction_date) : null;
-}
-// Built fresh from ACCOUNTS every time the filter shell renders (initial load /
-// 5-min poll) - never a hardcoded broker list, so a new broker added to the
-// accounts tab shows up here automatically with no code change.
-function brokerFilterOptions(){
-  const brokers = Array.from(new Set(ACCOUNTS.map(function(a){ return a.broker; }).filter(Boolean))).sort();
-  return '<option value="">All Brokers</option>' + brokers.map(function(b){
-    return '<option value="' + b.replace(/"/g,'') + '"' + (closedFilter.broker===b?' selected':'') + '>' + b + '</option>';
-  }).join('');
-}
-function renderTickerCards(){
-  const allData = HOLDINGS.filter(function(h){ return !String(h.asset_id).startsWith('CASH-'); });
-  const open = fullyFiltered(allData).filter(function(h){ return h.quantity > 0; });
-  // Was quantity===0 only, which silently dropped partially-closed positions
-  // (some sold, some still held) - CalcEngine already computes their realized
-  // gain correctly, this just widens what the section shows.
-  const closed = allData.filter(function(h){ return h.quantity === 0 || Math.abs(h.realized_gain_base||0) > 1e-9; });
-  const sorted = open.slice().sort(sortComparator(openSortBy));
-  const cardsHtml = sorted.map(function(h,i){
-    const dayDir = h.day_gain_pct==null ? 'flat' : h.day_gain_pct>0 ? 'up' : h.day_gain_pct<0 ? 'down' : 'flat';
-    const dayStr = h.day_gain_pct==null ? '-' : (h.day_gain_pct>0?'+':'') + h.day_gain_pct.toFixed(2) + '%';
-    const totDir = h.total_gain_pct==null ? 'flat' : h.total_gain_pct>0 ? 'up' : h.total_gain_pct<0 ? 'down' : 'flat';
-    const totStr = h.total_gain_pct==null ? '-' : (h.total_gain_pct>0?'+':'') + h.total_gain_pct.toFixed(1) + '%';
-    const stale = h.price_stale_days!=null && h.price_stale_days > 10;
-    // LTP and Total invested are shown in the BUY currency (h.currency), never
-    // market_value_base's USD, so they line up with what the brokerage platform
-    // itself shows - h.latest_price_trade_ccy/h.cost_basis_trade_ccy handle the
-    // conversion server-side, same fields the AED-value fix relies on.
-    const ltpStr = h.latest_price_trade_ccy!==null && h.latest_price_trade_ccy!==undefined
-      ? fmtMoney(h.latest_price_trade_ccy, h.currency) : '-';
-    const totalInvestedStr = h.cost_basis_trade_ccy!==null && h.cost_basis_trade_ccy!==undefined
-      ? fmtMoney(h.cost_basis_trade_ccy, h.currency) : '-';
-    const localVal = h.currency !== 'USD' ? fmtMoney(h.market_value_trade_ccy||0, h.currency) : null;
-    const displayValue = h.market_value_estimated!==undefined ? h.market_value_estimated : h.market_value_base;
-    const cardKey = h.account_id + '__' + h.asset_id;
-    return '<div class="card" id="tc-' + i + '"><div class="row" onclick="toggleCard(' + i + ')">' +
-      '<div class="left-col"><div class="ticker-line"><span class="ticker">' + h.asset_id + '</span>' +
-      '<span class="qty">x' + Number(h.quantity).toLocaleString(undefined,{maximumFractionDigits:4}) + '</span>' +
-      '<span class="quality-num ' + qClass(h.conviction) + '">' + (h.conviction!=='' && h.conviction!=null ? Number(h.conviction).toFixed(1) : '-') + '</span></div>' +
-      '<span class="name">' + (h.asset_name||'') + ' - ' + h.account_id + '</span>' +
-      '<span class="local-value">LTP ' + maskable(ltpStr) + '</span></div>' +
-      '<div class="right-col"><span class="mkt-value ' + (h.is_estimated?'estimated':'') + '">' + maskable(displayValue!==null?fmtUsd(displayValue):'-') + (h.is_estimated?' *':'') + '</span>' +
-      (localVal?('<span class="local-value">' + maskable(localVal) + '</span>'):'') +
-      '<div class="gain-lines"><div class="gain-line"><span class="gain-lbl">24H</span><span class="change ' + dayDir + '">' + dayStr + '</span></div>' +
-      '<div class="gain-line"><span class="gain-lbl">ALL-TIME</span><span class="change ' + totDir + '">' + totStr + '</span></div></div>' +
-      (stale?('<span class="stale-badge">' + h.price_stale_days + 'd stale</span>'):'') + '</div><span class="chevron">v</span></div>' +
-      '<div class="panel"><div class="meta-line">Avg cost ' + (h.avg_cost_per_unit!=null?h.avg_cost_per_unit.toFixed(4):'-') + ' ' + h.currency + ' - Total invested ' + maskable(totalInvestedStr) + ' - Realized ' + fmtUsd(h.realized_gain_base) + ' - Fees paid ' + fmtUsd(h.total_fees_paid_base) +
-      (h.is_estimated?'<br><span style="color:var(--orange)">* At cost - no live price has ever been fetched.</span>':'') + '</div>' +
-      (h.manual_override?(
-      '<div class="price-edit-row" onclick="event.stopPropagation()">' +
-      '<input type="number" step="any" placeholder="Set price (' + h.currency + ')" id="pe-' + i + '" name="pe-' + i + '" class="price-edit-input">' +
-      '<button class="refresh-btn" onclick="submitManualPrice(\'' + cardKey + '\', \'pe-' + i + '\')">Save price</button>' +
-      '<button class="refresh-btn" onclick="submitResumeAutoFetch(\'' + cardKey + '\')">Resume auto-fetch</button>' +
-      '</div>'
-      ):'') +
-      '<div class="lot-row head"><span>Lot</span><span>Qty</span><span>Cost</span><span>Term</span><span style="text-align:right">G/L</span></div>' +
-      (h.lots||[]).map(function(l){ return '<div class="lot-row"><span>' + l.lot_id + '<br><span style="color:var(--text-faint)">' + l.date + '</span></span><span>' + l.qty + '</span><span>' + l.cost_per_unit + '</span>' +
-        '<span>' + (l.term?('<span class="lot-term ' + l.term.toLowerCase() + '">' + l.term + '</span>'):'-') + '</span>' +
-        '<span class="lot-gl ' + (l.unrealized_gain_base>=0?'up':'down') + '">' + (l.harvest_candidate?'[H] ':'') + (l.unrealized_gain_base!==null?fmtUsd(l.unrealized_gain_base):'-') + '</span></div>'; }).join('') +
-      // Full buy/sell history - only shown when there actually IS history beyond
-      // the lots already visible above (i.e. this ticker has been sold from at
-      // some point, even partially). Renders instantly, synchronously, from the
-      // already-loaded TRANSACTIONS array as soon as the card is expanded - no
-      // click, no network call, no dependency on position_transactions at all.
-      (Math.abs(h.realized_gain_base||0)>1e-9 ?
-        '<div class="txn-history-label">Transaction history (includes past sells)</div>' +
-        renderTxnRows(TRANSACTIONS.filter(function(t){ return t.asset_id===h.asset_id && t.account_id===h.account_id; }))
-        : '') +
-      '</div></div>';
-  }).join('');
-  const closedTotalAll = closed.reduce(function(s,h){ return s+(h.realized_gain_base||0); },0);
-
-  document.getElementById('cards-section').innerHTML = cardsHtml || '<p class="hint">No positions match the current filter.</p>';
-  // Collapsed by default - only "TOTAL SOLD POSITIONS" + aggregate P/L show until
-  // clicked. The filter-bar INPUTS render exactly once here (this function only
-  // runs on data reload / the 5-min poll, never on a keystroke) - the actual
-  // results list lives in its own #closed-results container that
-  // renderClosedResultsOnly() rebuilds on every filter/sort change instead. This
-  // is the real fix for the mobile "kicked out while typing" bug: recreating an
-  // <input> mid-typing dismisses the on-screen keyboard on phones even when
-  // focus/cursor are correctly restored in code - so the fix is to stop
-  // recreating the input at all, not to restore it faster.
-  const closedSummaryTotal = closedTotalAll;
-  const closedCount = closed.length;
-  document.getElementById('closed-section').innerHTML =
-    '<div class="closed-section-card" id="closed-toggle">' +
-    '<div class="closed-row" onclick="toggleClosedSection()" style="cursor:pointer;border-color:var(--border);">' +
-    '<span style="font-weight:600;">TOTAL SOLD POSITIONS (' + closedCount + ')</span>' +
-    '<b class="change ' + (closedSummaryTotal>=0?'up':'down') + '">' + (closedSummaryTotal>=0?'+':'-') + maskable(fmtUsd(Math.abs(closedSummaryTotal))) + '</b></div>' +
-    '<div class="closed-section-body">' +
-    (closedCount ? (
-      '<div class="closed-filters">' +
-      '<span style="position:relative;display:inline-block;">' +
-      '<input type="text" name="closed-filter-ticker" id="closed-filter-ticker" placeholder="Filter ticker..." style="text-transform:uppercase;" value="' + closedFilter.ticker.replace(/"/g,'') + '" oninput="setClosedFilter(\'ticker\', this.value)" onfocus="updateTickerSuggestions(this.value)" class="price-edit-input">' +
-      '<div id="closed-ticker-suggest" class="ticker-suggest"></div>' +
-      '</span>' +
-      '<select name="closed-filter-broker" id="closed-filter-broker" onchange="setClosedFilter(\'broker\', this.value)" class="price-edit-input">' + brokerFilterOptions() + '</select>' +
-      '<input type="date" name="closed-filter-from" id="closed-filter-from" value="' + closedFilter.from + '" onchange="setClosedFilter(\'from\', this.value)" class="price-edit-input">' +
-      '<span class="hint" style="align-self:center;">to</span>' +
-      '<input type="date" name="closed-filter-to" id="closed-filter-to" value="' + closedFilter.to + '" onchange="setClosedFilter(\'to\', this.value)" class="price-edit-input">' +
-      '<button class="refresh-btn" id="closed-filter-clear-btn" style="display:none;" onclick="clearClosedFilter()">Clear</button>' +
-      '</div>' +
-      '<div class="closed-filters" style="margin-top:8px;">' +
-      '<button class="refresh-btn" onclick="setClosedRangePreset(\'ytd\')">YTD</button>' +
-      '<button class="refresh-btn" onclick="setClosedRangePreset(\'ly\')">Last Year</button>' +
-      '<button class="refresh-btn" onclick="setClosedRangePreset(\'inception\')">Since Inception</button>' +
-      '<span class="hint" style="align-self:center;margin-left:8px;">Sort:</span>' +
-      '<select id="closed-filter-sort" onchange="setClosedSort(this.value)" class="price-edit-input" style="font-size:9px;">' + sortOptionsHtml(closedFilter.sortBy) + '</select>' +
-      '</div>'
-    ) : '') +
-    '<div id="closed-results"></div>' +
-    '</div></div>';
-  renderClosedResultsOnly();
-}
-// Rebuilds ONLY the results list (total line + individual closed/partial-close
-// cards) - never touches the filter-bar <input> elements, so typing, the 5-min
-// auto-poll, and every preset/sort click can all fire freely without ever
-// interrupting a field the user is actively using.
-function renderClosedResultsOnly(){
-  const resultsEl = document.getElementById('closed-results');
-  if(!resultsEl) return;
-  const closed = HOLDINGS.filter(function(h){ return !String(h.asset_id).startsWith('CASH-') && (h.quantity===0 || Math.abs(h.realized_gain_base||0)>1e-9); });
-  const tickerNeedle = closedFilter.ticker.toUpperCase();
-  const fromDate = closedFilter.from ? new Date(closedFilter.from) : null;
-  const toDate = closedFilter.to ? new Date(closedFilter.to) : null;
-  const closedFilteredList = closed.filter(function(h){
-    if(tickerNeedle && h.asset_id.toUpperCase().indexOf(tickerNeedle) === -1) return false;
-    if(closedFilter.broker && accountBroker(h.account_id) !== closedFilter.broker) return false;
-    const cd = closedDateFor(h);
-    if(fromDate && cd && cd < fromDate) return false;
-    if(toDate && cd && cd > toDate) return false;
-    return true;
-  }).sort(sortComparator(closedFilter.sortBy));
-  CLOSED_LIST_CACHE = closedFilteredList;
-  const closedTotal = closedFilteredList.reduce(function(s,h){ return s+(h.realized_gain_base||0); },0);
-  const filtersActive = !!(closedFilter.ticker || closedFilter.broker || closedFilter.from || closedFilter.to);
-  const clearBtn = document.getElementById('closed-filter-clear-btn');
-  if(clearBtn) clearBtn.style.display = filtersActive ? '' : 'none';
-  const closedHtml = closedFilteredList.length ? closedFilteredList.map(function(h, ci){
-    const localRealized = (h.currency!=='USD' && h.realized_gain_trade_ccy!==null && h.realized_gain_trade_ccy!==undefined)
-      ? ' (' + maskable(fmtMoney(h.realized_gain_trade_ccy, h.currency)) + ')' : '';
-    const partialBadge = h.quantity > 0
-      ? ' <span class="hint" style="font-weight:400;">(partial - ' + h.quantity + ' still held)</span>' : '';
-    return '<div class="closed-card" id="cc-' + ci + '">' +
-      '<div class="closed-row" onclick="toggleClosedCard(' + ci + ')" style="cursor:pointer;">' +
-      '<span>' + h.asset_id + ' - ' + (h.asset_name||'') + ' (' + h.account_id + ')' + partialBadge + '</span>' +
-      '<b>Realized: ' + fmtUsd(h.realized_gain_base) + localRealized + '</b></div>' +
-      '<div class="closed-detail-panel" id="cc-detail-' + ci + '">' +
-      renderTxnRows(TRANSACTIONS.filter(function(t){ return t.asset_id===h.asset_id && t.account_id===h.account_id; })) +
-      '</div></div>';
-  }).join('') : '<p class="hint">No closed positions match the current filter.</p>';
-  const closedTotalHtml = closed.length ? '<div class="closed-row" style="border-color:var(--border);"><span style="font-weight:600;">Total realized P/L - ' + closedFilteredList.length + ' of ' + closed.length + ' closed position(s)</span><b class="change ' + (closedTotal>=0?'up':'down') + '">' + (closedTotal>=0?'+':'-') + maskable(fmtUsd(Math.abs(closedTotal))) + '</b></div>' : '';
-  resultsEl.innerHTML = closedTotalHtml + closedHtml;
-  restoreExpandedHistoryPanels();
-}
-function toggleClosedSection(){
-  const el = document.getElementById('closed-toggle');
-  if(el) el.classList.toggle('expanded');
-}
-function setClosedFilter(key, value){
-  closedFilter[key] = key==='ticker' ? value.toUpperCase() : value;
-  if(key==='ticker') updateTickerSuggestions(closedFilter.ticker);
-  renderClosedResultsOnly();
-}
-function clearClosedFilter(){
-  closedFilter = defaultClosedFilter();
-  syncClosedFilterInputs();
-  hideTickerSuggestions();
-  renderClosedResultsOnly();
-}
-function syncClosedFilterInputs(){
-  const t = document.getElementById('closed-filter-ticker'); if(t) t.value = closedFilter.ticker;
-  const b = document.getElementById('closed-filter-broker'); if(b) b.value = closedFilter.broker;
-  const f = document.getElementById('closed-filter-from'); if(f) f.value = closedFilter.from;
-  const to = document.getElementById('closed-filter-to'); if(to) to.value = closedFilter.to;
-  const s = document.getElementById('closed-filter-sort'); if(s) s.value = closedFilter.sortBy;
-}
-// Lines up matching tickers under the filter input as each letter is typed -
-// built from the actual closed/partial-close list (not a hardcoded symbol set),
-// so it always reflects whatever's really in the ledger. Prefix match, since
-// that's the natural feel for a typeahead.
-function updateTickerSuggestions(prefix){
-  const el = document.getElementById('closed-ticker-suggest');
-  if(!el) return;
-  const p = (prefix||'').toUpperCase();
-  if(!p){ el.classList.remove('show'); el.innerHTML=''; return; }
-  const closedTickers = Array.from(new Set(HOLDINGS.filter(function(h){
-    return !String(h.asset_id).startsWith('CASH-') && (h.quantity===0 || Math.abs(h.realized_gain_base||0)>1e-9);
-  }).map(function(h){ return h.asset_id; })));
-  const matches = closedTickers.filter(function(t){ return t.toUpperCase().indexOf(p)===0; }).sort().slice(0,8);
-  if(!matches.length){ el.classList.remove('show'); el.innerHTML=''; return; }
-  el.innerHTML = matches.map(function(t){ return '<div class="ticker-suggest-row" onmousedown="selectTickerSuggestion(\'' + t.replace(/'/g,"\\'") + '\')">' + t + '</div>'; }).join('');
-  el.classList.add('show');
-}
-function selectTickerSuggestion(ticker){
-  closedFilter.ticker = ticker;
-  const t = document.getElementById('closed-filter-ticker'); if(t) t.value = ticker;
-  hideTickerSuggestions();
-  renderClosedResultsOnly();
-}
-function hideTickerSuggestions(){
-  const el = document.getElementById('closed-ticker-suggest');
-  if(el){ el.classList.remove('show'); el.innerHTML=''; }
-}
-document.addEventListener('click', function(e){
-  if(e.target && e.target.id==='closed-filter-ticker') return;
-  hideTickerSuggestions();
-});
-let CLOSED_LIST_CACHE = [];
-// Expand state (which single closed card is open) still needs tracking by
-// stable key across re-renders (keystroke/auto-poll rebuild the whole section),
-// but there's no cache/fetch to restore anymore - content is already baked into
-// every card's HTML at render time, so this only needs to re-apply one CSS class.
-let EXPANDED_CLOSED_KEY = null;
-function toggleClosedCard(i){
-  const card=document.getElementById('cc-'+i);
-  if(!card) return;
-  const h = CLOSED_LIST_CACHE[i];
-  const was=card.classList.contains('expanded');
-  document.querySelectorAll('.closed-card').forEach(function(c){ c.classList.remove('expanded'); });
-  EXPANDED_CLOSED_KEY = was ? null : (h ? (h.account_id + '::' + h.asset_id) : null);
-  if(!was) card.classList.add('expanded');
-}
-function renderTxnRows(txns){
-  const sorted = txns.slice().sort(function(a,b){ return new Date(b.date)-new Date(a.date); });
-  const rows = sorted.map(function(t){
-    return '<div class="lot-row"><span>' + t.date + '</span><span>' + t.action + '</span>' +
-      '<span>' + (t.quantity!==undefined&&t.quantity!==null?t.quantity:'-') + '</span>' +
-      '<span>' + (t.price!==undefined&&t.price!==null?fmtMoney(Number(t.price), t.trade_currency):'-') + '</span>' +
-      '<span style="text-align:right">' + (t.base_currency_amount!==undefined&&t.base_currency_amount!==null?fmtUsd(Number(t.base_currency_amount)):'-') + '</span></div>';
-  }).join('');
-  return '<div class="lot-row head"><span>Date</span><span>Action</span><span>Qty</span><span>Price</span><span style="text-align:right">Base amt</span></div>' +
-    (rows || '<p class="hint">No transaction history found for this position.</p>');
-}
-function toggleCard(i){
-  const card=document.getElementById('tc-'+i);
-  const was=card.classList.contains('expanded');
-  document.querySelectorAll('.card').forEach(function(c){ c.classList.remove('expanded'); });
-  if(!was) card.classList.add('expanded');
-}
-function restoreExpandedHistoryPanels(){
-  // Runs after every renderTickerCards() rebuild - re-applies which closed card
-  // was expanded, by stable key, since the whole section gets rebuilt fresh on
-  // every filter keystroke and every 5-min auto-poll. Content itself needs no
-  // restoring anymore - it's already present in the freshly-built HTML.
-  if(EXPANDED_CLOSED_KEY){
-    const idx = CLOSED_LIST_CACHE.findIndex(function(h){ return (h.account_id+'::'+h.asset_id) === EXPANDED_CLOSED_KEY; });
-    if(idx>=0){
-      const card = document.getElementById('cc-'+idx);
-      if(card) card.classList.add('expanded');
+      invalidateHoldingsCache_();
+      SET_MANUAL_PRICE(assetId, price);
+      const result = CALCULATE_HOLDINGS();
+      payload = {
+        asOfDate: result.asOfDate,
+        holdingsSummary: result.holdingsSummary,
+        holdingsLots: result.holdingsLots,
+        warnings: result.warnings,
+      };
+      setCachedHoldingsPayload_(payload);
+    } else if (action === 'resume_auto_fetch') {
+      const assetId = e.parameter.asset_id;
+      if (!assetId) return jsonResponse({ error: 'resume_auto_fetch requires asset_id' }, 400);
+      invalidateHoldingsCache_();
+      RESUME_AUTO_FETCH(assetId);
+      const result = CALCULATE_HOLDINGS();
+      payload = {
+        asOfDate: result.asOfDate,
+        holdingsSummary: result.holdingsSummary,
+        holdingsLots: result.holdingsLots,
+        warnings: result.warnings,
+      };
+      setCachedHoldingsPayload_(payload);
+    } else if (action === 'targets') {
+      payload = { targets: sheetToObjects('targets') };
+    } else if (action === 'transactions') {
+      // Now cached (same pattern as holdings) - this action fires on every page
+      // load AND every 5-min auto-poll, but the transaction ledger itself only
+      // changes when a real BUY/SELL/etc happens, so most of those reads were
+      // pure waste. Also drops rows with no action set (blank placeholder rows
+      // left over from an old import-undo, ~121 of them) before sending -
+      // they're invisible no-ops to CalcEngine's own run() but there's no
+      // reason to ship dead weight over the wire to the dashboard too.
+      const cachedTxns = getCachedTransactionsPayload_();
+      if (cachedTxns) {
+        payload = cachedTxns;
+      } else {
+        const txns = sheetToObjects('transactions')
+          .filter(t => t.action) // drops the ~121 blank/no-action rows
+          .map(t => ({
+            date: t.date, action: t.action, base_currency_amount: t.base_currency_amount,
+            asset_id: t.asset_id, account_id: t.account_id,
+            quantity: t.quantity, price: t.price, trade_currency: t.trade_currency, fees: t.fees,
+          }));
+        payload = { transactions: txns };
+        setCachedTransactionsPayload_(payload);
+      }
+    } else if (action === 'returns') {
+      // XIRR + TWR etc from CalculateReturns.gs. Cached separately from
+      // holdings, on a longer TTL - a return % doesn't need to update on every
+      // 5-min poll or every price refresh the way live prices do, and
+      // CALCULATE_RETURNS is real work (dozens of in-memory valuations across
+      // the tracking period), so recomputing it that often would be pure waste.
+      // Only invalidated by create_transaction (a real cash-flow/holdings
+      // change) - NOT by refresh/set_manual_price, since a live price tick
+      // moving the current value by a few dollars doesn't meaningfully change
+      // an ITD return percentage.
+      const cachedReturns = getCachedReturnsPayload_();
+      if (cachedReturns) {
+        payload = cachedReturns;
+      } else {
+        payload = CALCULATE_RETURNS(e.parameter.includeClosedGains === 'true');
+        setCachedReturnsPayload_(payload);
+      }
+    } else if (action === 'position_transactions') {
+      // Kept for backward compatibility / other callers, but the dashboard no
+      // longer calls this - see the transactions action above.
+      const assetId = e.parameter.asset_id;
+      const accountId = e.parameter.account_id;
+      if (!assetId || !accountId) {
+        return jsonResponse({ error: 'position_transactions requires asset_id and account_id' }, 400);
+      }
+      const txns = sheetToObjects('transactions')
+        .filter(t => t.asset_id === assetId && t.account_id === accountId)
+        .map(t => ({
+          date: t.date, action: t.action, base_currency_amount: t.base_currency_amount,
+          quantity: t.quantity, price: t.price, trade_currency: t.trade_currency, fees: t.fees,
+        }));
+      payload = { transactions: txns };
+    } else if (action === 'accounts') {
+      payload = { accounts: sheetToObjects('accounts') };
+    } else if (action === 'config') {
+      payload = { config: getConfigMap() };
+    } else if (action === 'get_accounts_for_form') {
+      payload = { accounts: GET_ACCOUNTS_FOR_FORM() };
+    } else if (action === 'get_all_assets_for_form') {
+      payload = { assets: GET_ALL_ASSETS_FOR_FORM() };
+    } else if (action === 'get_held_assets_for_account') {
+      const accountId = e.parameter.account_id;
+      if (!accountId) return jsonResponse({ error: 'get_held_assets_for_account requires account_id' }, 400);
+      payload = { assets: GET_HELD_ASSETS_FOR_ACCOUNT(accountId) };
+    } else if (action === 'get_current_quantity') {
+      const accountId = e.parameter.account_id;
+      const assetId = e.parameter.asset_id;
+      if (!accountId || !assetId) return jsonResponse({ error: 'get_current_quantity requires account_id and asset_id' }, 400);
+      payload = { quantity: GET_CURRENT_QUANTITY(accountId, assetId) };
+    } else if (action === 'get_fx_rate_for_form') {
+      const fromCcy = e.parameter.from_currency;
+      const toCcy = e.parameter.to_currency;
+      if (!fromCcy || !toCcy) return jsonResponse({ error: 'get_fx_rate_for_form requires from_currency and to_currency' }, 400);
+      payload = GET_FX_RATE_FOR_FORM(fromCcy, toCcy, e.parameter.date);
+    } else if (action === 'get_watchlist') {
+      payload = { watchlist: GET_WATCHLIST() };
+    } else if (action === 'add_watchlist_item') {
+      payload = ADD_WATCHLIST_ITEM(e.parameter);
+    } else if (action === 'remove_watchlist_item') {
+      const watchlistId = e.parameter.watchlist_id;
+      if (!watchlistId) return jsonResponse({ error: 'remove_watchlist_item requires watchlist_id' }, 400);
+      payload = REMOVE_WATCHLIST_ITEM(watchlistId);
+    } else if (action === 'create_transaction') {
+      // Changes holdings (a new row affects quantities/cash/gains) - invalidate
+      // BEFORE writing, same rule every other write action in this file follows,
+      // so the very next 'holdings' load can never serve a stale cached payload.
+      // Also the only action that invalidates transactions/returns caches - a
+      // new ledger row is the only thing that actually changes either of those.
+      invalidateHoldingsCache_();
+      invalidateTransactionsCache_();
+      invalidateReturnsCache_();
+      payload = CREATE_TRANSACTION(e.parameter);
     } else {
-      EXPANDED_CLOSED_KEY = null; // no longer in the filtered/sorted list - nothing to restore
+      return jsonResponse({ error: 'Unknown action: ' + action }, 400);
     }
+    if (payload && typeof payload === 'object') payload.accessLevel = access.level;
+    return jsonResponse(payload, 200);
+  } catch (err) {
+    return jsonResponse({ error: err.message }, 500);
   }
 }
-function renderAll(){ renderGoalAndPace(); renderFiltersAndRings(); renderTickerCards(); }
-function buildAppShell(){
-  document.getElementById('app').innerHTML =
-    '<div id="goal-section"></div><div id="pace-section"></div><div id="capital-section"></div>' +
-    '<div id="trajectory-section"></div><div id="contribution-section"></div>' +
-    '<div class="breadcrumb" id="breadcrumb"></div>' +
-    '<div class="filter-bar" id="filter-bar"><span class="filter-empty" id="filter-text">No filter active</span>' +
-    '<button class="filter-clear" id="filter-clear-btn" style="display:none;" onclick="clearFilter()">Clear all</button></div>' +
-    '<div id="region-ring-section"></div><div class="donut-grid" id="donut-grid"></div>' +
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin:18px 0 10px;">' +
-    '<p class="section-title" style="margin:0;">HOLDINGS</p>' +
-    '<select id="open-sort-select" onchange="setOpenSort(this.value)" class="price-edit-input" style="font-size:9px;">' + sortOptionsHtml(openSortBy) + '</select>' +
-    '</div><div id="cards-section"></div><div id="closed-section"></div>' +
-    '<p class="hint">Live from your Sheet. Auto-refreshes every 5 min. Refresh button triggers a real price fetch (up to a minute).</p>';
+
+function jsonResponse(obj, statusCode) {
+  const output = ContentService.createTextOutput(JSON.stringify(obj));
+  output.setMimeType(ContentService.MimeType.JSON);
+  return output;
 }
-function attachLots(lots){ HOLDINGS.forEach(function(h){ h.lots = lots.filter(function(l){ return l.account_id===h.account_id && l.asset_id===h.asset_id; }); }); }
-function sleep(ms){ return new Promise(function(resolve){ setTimeout(resolve, ms); }); }
-function freshFetch(url){ return fetch(url + (url.indexOf('?')>=0 ? '&' : '?') + '_ts=' + Date.now(), { cache: 'no-store' }); }
-async function loadData(action, extraParams){
-  let url = WEB_APP_URL + '?action=' + action;
-  if (extraParams) Object.keys(extraParams).forEach(function(k){ url += '&' + k + '=' + encodeURIComponent(extraParams[k]); });
-  // Apps Script Web Apps occasionally return a transient failure (404/5xx) that
-  // succeeds a moment later - one retry after a short delay before giving up and
-  // showing the error screen, rather than treating every blip as a hard failure.
-  let lastErr;
-  for(let attempt=1; attempt<=2; attempt++){
-    try{
-      const res = await freshFetch(url);
-      if(!res.ok) throw new Error('HTTP ' + res.status + ' on action=' + action);
-      const json = await res.json();
-      if(json.error) throw new Error(json.error);
-      return json;
-    } catch(err){
-      lastErr = err;
-      if(attempt===1) await sleep(2000);
-    }
-  }
-  throw lastErr;
-}
-function parseCardKey(cardKey){ const parts = cardKey.split('__'); return { account_id: parts[0], asset_id: parts[1] }; }
-async function submitManualPrice(cardKey, inputId){
-  const input = document.getElementById(inputId);
-  const price = Number(input.value);
-  if(!input.value || isNaN(price)){ input.focus(); return; }
-  const { asset_id } = parseCardKey(cardKey);
-  input.disabled = true;
-  try{
-    await loadData('set_manual_price', { asset_id: asset_id, price: price });
-    await fullLoad(false);
-  } catch(err){
-    alert('Could not save manual price: ' + err.message);
-    input.disabled = false;
-  }
-}
-async function submitResumeAutoFetch(cardKey){
-  const { asset_id } = parseCardKey(cardKey);
-  try{
-    await loadData('resume_auto_fetch', { asset_id: asset_id });
-    await fullLoad(false);
-  } catch(err){
-    alert('Could not resume auto-fetch: ' + err.message);
-  }
-}
-let loadInProgress = false;
-async function fullLoad(triggerRefresh){
-  if(loadInProgress) return; // avoid overlapping calls (auto-poll vs. manual click) piling up executions
-  loadInProgress = true;
-  const holdingsAction = triggerRefresh ? 'refresh' : 'holdings';
-  const asofEl = document.getElementById('asof-line');
-  const btn = document.getElementById('refresh-btn');
-  if(btn){ btn.disabled = true; btn.textContent = triggerRefresh ? 'Fetching...' : 'Loading...'; }
-  if(triggerRefresh) asofEl.textContent = 'Fetching live prices - can take up to a minute...';
-  try{
-    const hJson = await loadData(holdingsAction);
-    HOLDINGS = hJson.holdingsSummary || [];
-    attachLots(hJson.holdingsLots || []);
-    const results = await Promise.all([loadData('accounts'), loadData('targets'), loadData('transactions'), loadData('config')]);
-    ACCOUNTS = results[0].accounts || []; TARGETS = results[1].targets || []; TRANSACTIONS = results[2].transactions || [];
-    CONFIG = results[3].config || {};
-    asofEl.textContent = 'Live as of ' + new Date(hJson.asOfDate).toLocaleString() +
-      (hJson.warnings && hJson.warnings.length ? ' - ' + hJson.warnings.length + ' warning(s)' : '') +
-      (hJson.refreshedPrices ? ' - prices just refreshed' : '');
-    buildAppShell(); renderAll();
-  } catch(err){
-    document.getElementById('app').innerHTML = '<div class="error-box"><b>Could not load live data</b><br><br>' + err.message + '<br><br><button class="refresh-btn" onclick="fullLoad(false)">Retry</button></div>';
-    console.error(err);
-  } finally {
-    if(btn){ btn.disabled = false; btn.textContent = 'Refresh prices'; }
-    loadInProgress = false;
-  }
-}
-setInterval(function(){ fullLoad(false); }, 5*60*1000);
-fullLoad(false);
-</script>
-</body>
-</html>
