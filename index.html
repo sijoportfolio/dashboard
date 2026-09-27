@@ -233,23 +233,10 @@
   .closed-section-card.expanded .closed-section-body{display:block;}
   .hint{font-size:10px;color:var(--text-faint);margin-top:18px;line-height:1.6;}
 
-  /* ---- Add Transaction modal ---- */
-  .fab-stack{position:fixed;bottom:24px;right:20px;display:flex;flex-direction:column;align-items:center;gap:12px;z-index:800;}
-  .fab-sub{width:46px;height:46px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);
-    color:var(--gold-bright);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;
-    box-shadow:0 4px 12px rgba(0,0,0,.4);opacity:0;transform:translateY(10px) scale(.7);
-    transition:opacity .18s ease, transform .18s ease;pointer-events:none;}
-  .fab-stack.expanded .fab-sub{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
-  .fab-main-wrap{position:relative;}
-  .fab-main{width:56px;height:56px;border-radius:50%;background:var(--gold);color:#08131F;border:none;
-    font-size:26px;line-height:1;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4);
-    display:flex;align-items:center;justify-content:center;}
-  .fab-chevron{position:absolute;top:-10px;left:50%;transform:translateX(-50%);width:20px;height:20px;
-    border-radius:50%;background:var(--surface);border:1px solid var(--gold);color:var(--gold-bright);
-    font-size:9px;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;
-    animation:chevron-hint 2.2s ease-in-out infinite;}
-  .fab-stack.expanded .fab-chevron{transform:translateX(-50%) rotate(180deg);animation:none;}
-  @keyframes chevron-hint{0%,100%{transform:translateX(-50%) translateY(0);}50%{transform:translateX(-50%) translateY(-3px);}}
+  /* ---- Add Transaction / Watchlist modal (merged into one form) ---- */
+  .fab-main{position:fixed;bottom:24px;right:20px;width:56px;height:56px;border-radius:50%;background:var(--gold);
+    color:#08131F;border:none;font-size:26px;line-height:1;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4);
+    display:flex;align-items:center;justify-content:center;z-index:800;}
 
   .tab-switcher{max-width:640px;margin:0 auto;padding:14px 16px 0;display:flex;gap:8px;}
   .tab-btn{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--text-faint);background:none;
@@ -287,7 +274,7 @@
   .wl-dir-btn{flex:1;font-family:var(--mono);font-size:10.5px;padding:9px;border-radius:7px;border:1px solid var(--border);
     background:var(--surface-2);color:var(--text-faint);cursor:pointer;}
   .wl-dir-btn.selected{border-color:var(--gold);color:var(--gold-bright);background:rgba(201,162,39,.08);}
-  .is-family .wl-dismiss, .is-family #fab-stack .fab-sub{display:none !important;}
+  .is-family .wl-dismiss{display:none !important;}
   .txn-modal-overlay.show{display:flex;}
   .txn-modal{background:var(--surface);border:1px solid var(--border-soft);border-radius:16px 16px 0 0;width:100%;max-width:480px;
     max-height:88vh;overflow-y:auto;padding:20px 18px 24px;}
@@ -353,23 +340,11 @@
   </div>
   <div id="watchlist-view" style="display:none;"></div>
 </div>
-<div class="fab-stack" id="fab-stack">
-  <div class="fab-sub" onclick="openWatchlistAddModal()" tabindex="0" title="Add to watchlist">👁</div>
-  <div class="fab-main-wrap">
-    <button class="fab-chevron" onclick="event.stopPropagation(); toggleFab();" title="More options">▲</button>
-    <button class="fab-main" onclick="openTxnModal()">+</button>
-  </div>
-</div>
+<button class="fab-main" id="fab-stack" onclick="openTxnModal()">+</button>
 <div class="txn-modal-overlay" id="txn-modal-overlay" onclick="if(event.target===this) closeTxnModal()">
   <div class="txn-modal">
-    <div class="txn-modal-title">Add Transaction<button class="txn-modal-close" onclick="closeTxnModal()">&times;</button></div>
+    <div class="txn-modal-title" id="txn-modal-title">Add Transaction<button class="txn-modal-close" onclick="closeTxnModal()">&times;</button></div>
     <div id="txn-modal-body"></div>
-  </div>
-</div>
-<div class="txn-modal-overlay" id="wl-add-modal-overlay" onclick="if(event.target===this) closeWatchlistAddModal()">
-  <div class="txn-modal">
-    <div class="txn-modal-title">Add to Watchlist<button class="txn-modal-close" onclick="closeWatchlistAddModal()">&times;</button></div>
-    <div id="wl-add-modal-body"></div>
   </div>
 </div>
 <div class="alert-banner" id="alert-banner">
@@ -1384,52 +1359,6 @@ function hideAlertBanner(){
   document.getElementById('alert-banner').classList.remove('show');
 }
 
-// ---- Add to Watchlist modal (reuses the txn-modal shell, separate state from the transaction form) ----
-let WL_ADD_STATE = {};
-function openWatchlistAddModal(){
-  WL_ADD_STATE = { ticker:'', company:'', sector:'', entry_low:'', entry_high:'', priority:'', notes:'' };
-  document.getElementById('wl-add-modal-overlay').classList.add('show');
-  document.getElementById('fab-stack').classList.remove('expanded');
-  renderWatchlistAddModal();
-}
-function closeWatchlistAddModal(){
-  document.getElementById('wl-add-modal-overlay').classList.remove('show');
-}
-function renderWatchlistAddModal(){
-  const el = document.getElementById('wl-add-modal-body');
-  el.innerHTML =
-    '<div class="txn-field"><label class="txn-label">TICKER</label><input type="text" class="txn-input" style="text-transform:uppercase;" oninput="WL_ADD_STATE.ticker=this.value.toUpperCase()"></div>' +
-    '<div class="txn-field"><label class="txn-label">COMPANY (optional)</label><input class="txn-input" oninput="WL_ADD_STATE.company=this.value"></div>' +
-    '<div class="txn-field"><label class="txn-label">SECTOR (optional)</label><input class="txn-input" oninput="WL_ADD_STATE.sector=this.value"></div>' +
-    '<div class="txn-field"><label class="txn-label">ENTRY LOW (optional)</label><input type="number" step="any" class="txn-input" oninput="WL_ADD_STATE.entry_low=this.value"></div>' +
-    '<div class="txn-field"><label class="txn-label">ENTRY HIGH</label><input type="number" step="any" class="txn-input" oninput="WL_ADD_STATE.entry_high=this.value"></div>' +
-    '<div class="txn-field"><label class="txn-label">PRIORITY (optional)</label><input class="txn-input" placeholder="e.g. PATIENT, URGENT" oninput="WL_ADD_STATE.priority=this.value"></div>' +
-    '<div class="txn-field"><label class="txn-label">NOTES (optional)</label><input class="txn-input" oninput="WL_ADD_STATE.notes=this.value"></div>' +
-    '<div id="wl-add-error"></div>' +
-    '<button class="txn-submit-btn" onclick="submitWatchlistAdd()">Save to watchlist</button>';
-}
-async function submitWatchlistAdd(){
-  if(!WL_ADD_STATE.ticker || !WL_ADD_STATE.entry_high){
-    document.getElementById('wl-add-error').innerHTML = '<div class="txn-error">Ticker and entry high are both required.</div>';
-    return;
-  }
-  try{
-    const r = await loadData('add_watchlist_item', {
-      ticker: WL_ADD_STATE.ticker, company: WL_ADD_STATE.company || '', sector: WL_ADD_STATE.sector || '',
-      entry_low: WL_ADD_STATE.entry_low || '', entry_high: WL_ADD_STATE.entry_high,
-      priority: WL_ADD_STATE.priority || '', notes: WL_ADD_STATE.notes || '',
-    });
-    if(!r.success){
-      document.getElementById('wl-add-error').innerHTML = '<div class="txn-error">' + (r.error||'Unknown error') + '</div>';
-      return;
-    }
-    closeWatchlistAddModal();
-    if(ACTIVE_TAB==='watchlist') loadWatchlist();
-  } catch(err){
-    document.getElementById('wl-add-error').innerHTML = '<div class="txn-error">' + err.message + '</div>';
-  }
-}
-
 // Cursor-jump-bug note: quantity/price/amount typing NEVER triggers a full
 // modal re-render - only #txn-preview-area / #txn-warning-area / the submit
 // button's disabled state get rewritten (see updateTxnComputedArea). Same
@@ -1443,7 +1372,8 @@ function toggleFab(){
   document.getElementById('fab-stack').classList.toggle('expanded');
 }
 function openTxnModal(){
-  TXN_STATE = { action:'BUY', account_id:'', asset_id:'', date: isoDateStr(new Date()), quantity:'', price:'', gross_amount:'', notes:'', newTicker:false };
+  TXN_STATE = { action:'BUY', account_id:'', asset_id:'', date: isoDateStr(new Date()), quantity:'', price:'', gross_amount:'', notes:'', newTicker:false,
+    ticker:'', company:'', sector:'', entry_low:'', entry_high:'', priority:'' };
   TXN_SELL_CONFIRMED = false;
   document.getElementById('txn-modal-overlay').classList.add('show');
   renderTxnModalBody();
@@ -1565,6 +1495,7 @@ function updateTxnComputedArea(){
   const btn = document.getElementById('txn-submit-btn'); if(btn) btn.disabled = !txnCanSubmit();
 }
 function txnCanSubmit(){
+  if(TXN_STATE.action==='WATCHLIST') return !!(TXN_STATE.ticker && TXN_STATE.entry_high);
   if(!TXN_STATE.account_id) return false;
   if((TXN_STATE.action==='BUY'||TXN_STATE.action==='SELL'||TXN_STATE.action==='DIVIDEND') && !TXN_STATE.asset_id) return false;
   if((TXN_STATE.action==='BUY'||TXN_STATE.action==='SELL') && (!TXN_STATE.quantity || !TXN_STATE.price)) return false;
@@ -1575,6 +1506,23 @@ function txnCanSubmit(){
 async function submitTxn(){
   const btn = document.getElementById('txn-submit-btn');
   if(btn){ btn.disabled = true; btn.textContent = 'Saving...'; }
+
+  if(TXN_STATE.action==='WATCHLIST'){
+    try{
+      const r = await loadData('add_watchlist_item', {
+        ticker: TXN_STATE.ticker, company: TXN_STATE.company||'', sector: TXN_STATE.sector||'',
+        entry_low: TXN_STATE.entry_low||'', entry_high: TXN_STATE.entry_high,
+        priority: TXN_STATE.priority||'', notes: TXN_STATE.notes||'',
+      });
+      if(!r.success){ TXN_STATE.submitError = r.error||'Unknown error'; renderTxnModalBody(); return; }
+      closeTxnModal();
+      if(ACTIVE_TAB==='watchlist') loadWatchlist();
+    } catch(err){
+      TXN_STATE.submitError = err.message; renderTxnModalBody();
+    }
+    return;
+  }
+
   const params = {
     action: TXN_STATE.action, account_id: TXN_STATE.account_id, asset_id: TXN_STATE.asset_id||'',
     date: TXN_STATE.date, quantity: TXN_STATE.quantity||'', price: TXN_STATE.price||'',
@@ -1599,12 +1547,33 @@ async function submitTxn(){
 function renderTxnModalBody(){
   const el = document.getElementById('txn-modal-body');
   if(!el) return;
+  document.getElementById('txn-modal-title').firstChild.textContent = TXN_STATE.action==='WATCHLIST' ? 'Add to Watchlist' : 'Add Transaction';
+  const isWatchlist = TXN_STATE.action==='WATCHLIST';
   const showQtyPrice = TXN_STATE.action==='BUY' || TXN_STATE.action==='SELL';
   const showAmountOnly = TXN_STATE.action==='DEPOSIT' || TXN_STATE.action==='WITHDRAWAL' || TXN_STATE.action==='DIVIDEND';
+
+  if(isWatchlist){
+    el.innerHTML =
+      '<div class="txn-field"><label class="txn-label">ACTION</label>' +
+      '<select class="txn-select" onchange="setTxnField(\'action\', this.value)">' +
+      ['BUY','SELL','DIVIDEND','DEPOSIT','WITHDRAWAL','WATCHLIST'].map(function(a){ return '<option value="' + a + '"' + (TXN_STATE.action===a?' selected':'') + '>' + (a==='WATCHLIST'?'Watchlist':a) + '</option>'; }).join('') +
+      '</select></div>' +
+      '<div class="txn-field"><label class="txn-label">TICKER</label><input type="text" class="txn-input" style="text-transform:uppercase;" value="' + (TXN_STATE.ticker||'') + '" oninput="TXN_STATE.ticker=this.value.toUpperCase()"></div>' +
+      '<div class="txn-field"><label class="txn-label">COMPANY (optional)</label><input class="txn-input" value="' + (TXN_STATE.company||'') + '" oninput="TXN_STATE.company=this.value"></div>' +
+      '<div class="txn-field"><label class="txn-label">SECTOR (optional)</label><input class="txn-input" value="' + (TXN_STATE.sector||'') + '" oninput="TXN_STATE.sector=this.value"></div>' +
+      '<div class="txn-field"><label class="txn-label">ENTRY LOW (optional)</label><input type="number" step="any" class="txn-input" value="' + (TXN_STATE.entry_low||'') + '" oninput="TXN_STATE.entry_low=this.value; updateTxnComputedArea();"></div>' +
+      '<div class="txn-field"><label class="txn-label">ENTRY HIGH</label><input type="number" step="any" class="txn-input" value="' + (TXN_STATE.entry_high||'') + '" oninput="TXN_STATE.entry_high=this.value; updateTxnComputedArea();"></div>' +
+      '<div class="txn-field"><label class="txn-label">PRIORITY (optional)</label><input class="txn-input" placeholder="e.g. PATIENT, URGENT" value="' + (TXN_STATE.priority||'') + '" oninput="TXN_STATE.priority=this.value"></div>' +
+      '<div class="txn-field"><label class="txn-label">NOTES (optional)</label><input class="txn-input" value="' + (TXN_STATE.notes||'') + '" oninput="TXN_STATE.notes=this.value"></div>' +
+      (TXN_STATE.submitError ? ('<div class="txn-error">' + TXN_STATE.submitError + '</div>') : '') +
+      '<button class="txn-submit-btn" id="txn-submit-btn" ' + (txnCanSubmit()?'':'disabled') + ' onclick="submitTxn()">Save to watchlist</button>';
+    return;
+  }
+
   el.innerHTML =
     '<div class="txn-field"><label class="txn-label">ACTION</label>' +
     '<select class="txn-select" onchange="setTxnField(\'action\', this.value)">' +
-    ['BUY','SELL','DIVIDEND','DEPOSIT','WITHDRAWAL'].map(function(a){ return '<option value="' + a + '"' + (TXN_STATE.action===a?' selected':'') + '>' + a + '</option>'; }).join('') +
+    ['BUY','SELL','DIVIDEND','DEPOSIT','WITHDRAWAL','WATCHLIST'].map(function(a){ return '<option value="' + a + '"' + (TXN_STATE.action===a?' selected':'') + '>' + (a==='WATCHLIST'?'Watchlist':a) + '</option>'; }).join('') +
     '</select></div>' +
     '<div class="txn-field"><label class="txn-label">ACCOUNT</label>' +
     '<select class="txn-select" onchange="setTxnField(\'account_id\', this.value)">' + txnAccountOptions() + '</select></div>' +
