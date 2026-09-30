@@ -312,6 +312,15 @@
   .lock-submit{width:100%;font-family:var(--mono);font-size:12px;font-weight:600;color:#08131F;background:var(--gold);
     border:none;border-radius:8px;padding:13px;cursor:pointer;}
   .lock-error{font-size:10.5px;color:var(--red);margin-top:10px;min-height:14px;}
+  .toast{position:fixed;left:16px;right:16px;bottom:24px;max-width:390px;margin:0 auto;z-index:1000;
+    background:var(--surface);border:1px solid var(--border-soft);border-radius:10px;padding:12px 16px;
+    font-size:11px;color:var(--text);box-shadow:0 8px 24px rgba(0,0,0,.5);
+    transform:translateY(140%);opacity:0;transition:transform .25s ease, opacity .2s ease;pointer-events:none;}
+  .toast.show{transform:translateY(0);opacity:1;pointer-events:auto;}
+  .toast.success{border-color:var(--green);}
+  .toast.error{border-color:var(--red);}
+  .txn-hint{font-size:9.5px;color:var(--text-faint);margin-top:4px;line-height:1.5;}
+  .txn-hint a{color:var(--gold-bright);}
   .is-family #refresh-btn, .is-family #fab-stack, .is-family .price-edit-row{display:none !important;}
 </style>
 </head>
@@ -348,6 +357,7 @@
     <div id="txn-modal-body"></div>
   </div>
 </div>
+<div class="toast" id="toast"></div>
 <div class="alert-banner" id="alert-banner">
   <div class="alert-icon">🎯</div>
   <div class="alert-body">
@@ -1161,7 +1171,11 @@ function buildAppShell(){
 function attachLots(lots){ HOLDINGS.forEach(function(h){ h.lots = lots.filter(function(l){ return l.account_id===h.account_id && l.asset_id===h.asset_id; }); }); }
 function sleep(ms){ return new Promise(function(resolve){ setTimeout(resolve, ms); }); }
 function freshFetch(url){ return fetch(url + (url.indexOf('?')>=0 ? '&' : '?') + '_ts=' + Date.now(), { cache: 'no-store' }); }
-let ACCESS_KEY = localStorage.getItem('portfolio_access_key') || '';
+// SESSION-ONLY: sessionStorage, not localStorage - the key is remembered for
+// this browser tab/session only, so closing the browser and reopening asks
+// again. A deliberate change (was localStorage, which persisted indefinitely)
+// - shared/family devices shouldn't stay silently unlocked forever.
+let ACCESS_KEY = sessionStorage.getItem('portfolio_access_key') || '';
 let ACCESS_LEVEL = null;
 async function loadData(action, extraParams){
   let url = WEB_APP_URL + '?action=' + action + '&key=' + encodeURIComponent(ACCESS_KEY);
@@ -1260,7 +1274,7 @@ async function initGate(){
       fullLoad(false);
       return;
     } catch(err){
-      localStorage.removeItem('portfolio_access_key');
+      sessionStorage.removeItem('portfolio_access_key');
       ACCESS_KEY = '';
     }
   }
@@ -1275,7 +1289,7 @@ async function submitAccessKey(){
   ACCESS_KEY = key;
   try{
     await loadData('config');
-    localStorage.setItem('portfolio_access_key', key);
+    sessionStorage.setItem('portfolio_access_key', key);
     errEl.textContent = '';
     showLockedUI(false);
     fullLoad(false);
@@ -1283,6 +1297,19 @@ async function submitAccessKey(){
     ACCESS_KEY = '';
     errEl.textContent = 'Incorrect key - try again.';
   }
+}
+// Called if a key that worked at page load gets rejected mid-session (e.g. the
+// owner rotated access_key_owner/family in the sheet while this tab was open).
+// Re-shows the lock screen with an explanatory message instead of leaving the
+// user stuck on a form that will just keep failing.
+function lockNow(message){
+  sessionStorage.removeItem('portfolio_access_key');
+  ACCESS_KEY = '';
+  showLockedUI(true);
+  const errEl = document.getElementById('lock-error');
+  if(errEl) errEl.textContent = message || '';
+  const input = document.getElementById('lock-key-input');
+  if(input){ input.value = ''; input.focus(); }
 }
 initGate();
 
@@ -1365,240 +1392,457 @@ function hideAlertBanner(){
 // button's disabled state get rewritten (see updateTxnComputedArea). Same
 // "stable input, isolated results div" pattern already proven bug-free on
 // the closed-positions ticker filter elsewhere in this file.
+// ---- Add Transaction / Watchlist modal (ONE form, six actions) ----
+// How this form behaves:
+//  * Pre-filled values are SUGGESTIONS - always editable, and never overwrite something you already typed.
+//  * Typing in quantity/price/amount/notes never rebuilds the form (only small hint/preview areas update),
+//    so the phone keyboard is never dismissed mid-typing - same fix proven on the closed-positions filter.
+//  * Nothing is hardcoded: accounts, tickers, asset classes and exchanges all come from the sheet.
+//  * On Save: SUCCESS -> the form closes, a green toast says exactly what was recorded, and you land on the
+//    tab where the result shows (Portfolio for a transaction, Watchlist for a watchlist add).
+//    FAILURE -> the form STAYS OPEN with everything you typed, a red message at the top says why, and a red
+//    toast repeats it - nothing is lost and nothing is half-saved.
 let TXN_ALL_ASSETS = null;
 let TXN_STATE = {};
 let TXN_SELL_CONFIRMED = false;
+let QUOTE_SEQ = 0;
+const FX_CACHE = {};
+const TXN_ACTIONS = ['BUY','SELL','DIVIDEND','DEPOSIT','WITHDRAWAL','WATCHLIST'];
 
-function toggleFab(){
-  document.getElementById('fab-stack').classList.toggle('expanded');
+function localDateStr(d){
+  // Local calendar date - NOT toISOString(), which is UTC and shows "yesterday" for a Gulf-time user after midnight.
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
+function escAttr(s){ return String(s===undefined||s===null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function setInputValue(id, v){ const el = document.getElementById(id); if(el) el.value = v; }
+function fmtQty(n){ return Number(n).toLocaleString(undefined,{maximumFractionDigits:4}); }
+function baseCcy(){ return (CONFIG && CONFIG.base_currency) || 'USD'; }
+function txnAccountRow(){ return ACCOUNTS.find(function(a){ return a.account_id===TXN_STATE.account_id; }) || null; }
+function txnCcy(){ const a = txnAccountRow(); return a ? a.currency : ''; }
+function heldForAccount(accountId){
+  return HOLDINGS.filter(function(h){ return h.account_id===accountId && !String(h.asset_id).startsWith('CASH-') && h.quantity>1e-6; })
+    .sort(function(a,b){ return String(a.asset_id).localeCompare(String(b.asset_id)); });
+}
+function heldQty(accountId, assetId){
+  const h = HOLDINGS.find(function(x){ return x.account_id===accountId && x.asset_id===assetId && x.quantity>1e-6; });
+  return h ? Number(h.quantity) : 0;
+}
+
+let TOAST_TIMER = null;
+function showToast(msg, type){
+  const el = document.getElementById('toast');
+  if(!el) return;
+  el.textContent = msg;
+  el.className = 'toast show ' + (type||'success');
+  clearTimeout(TOAST_TIMER);
+  TOAST_TIMER = setTimeout(function(){ el.classList.remove('show'); }, type==='error' ? 8000 : 4500);
+}
+
 function openTxnModal(){
-  TXN_STATE = { action:'BUY', account_id:'', asset_id:'', date: isoDateStr(new Date()), quantity:'', price:'', gross_amount:'', notes:'', newTicker:false,
-    ticker:'', company:'', sector:'', entry_low:'', entry_high:'', priority:'' };
+  TXN_STATE = { action: ACTIVE_TAB==='watchlist' ? 'WATCHLIST' : 'BUY', account_id:'', asset_id:'', date: localDateStr(new Date()),
+    quantity:'', price:'', gross_amount:'', notes:'', priceAuto:false, priceHint:'', accountHint:'',
+    asset_name:'', asset_class:'', exchange:'',
+    ticker:'', yahoo_id:'', company:'', sector:'', entry_low:'', entry_high:'', priority:'', wlHint:'',
+    sellWarning:null, fx:null, submitError:'' };
   TXN_SELL_CONFIRMED = false;
+  QUOTE_SEQ++;
   document.getElementById('txn-modal-overlay').classList.add('show');
   renderTxnModalBody();
   if(TXN_ALL_ASSETS===null){
-    loadData('get_all_assets_for_form').then(function(r){ TXN_ALL_ASSETS = r.assets||[]; }).catch(function(){ TXN_ALL_ASSETS = []; });
+    loadData('get_all_assets_for_form').then(function(r){ TXN_ALL_ASSETS = r.assets||[]; syncNewTickerFields(); }).catch(function(){ TXN_ALL_ASSETS = []; });
   }
 }
 function closeTxnModal(){
+  QUOTE_SEQ++;
   document.getElementById('txn-modal-overlay').classList.remove('show');
 }
 function txnAccountOptions(){
   return '<option value="">Select account...</option>' + ACCOUNTS.map(function(a){
-    return '<option value="' + a.account_id + '"' + (TXN_STATE.account_id===a.account_id?' selected':'') + '>' + a.account_id + ' (' + a.broker + ', ' + a.currency + ')</option>';
+    return '<option value="' + escAttr(a.account_id) + '"' + (TXN_STATE.account_id===a.account_id?' selected':'') + '>' + escAttr(a.account_id) + ' (' + escAttr(a.broker) + ', ' + escAttr(a.currency) + ')</option>';
   }).join('');
 }
-async function refreshComputedChecks(){
-  await Promise.all([refreshTxnPreview(), checkTxnSellWarning()]);
-  updateTxnComputedArea();
-}
+
 function setTxnField(key, value){
   TXN_STATE[key] = value;
-  if(key==='action' || key==='account_id'){
-    TXN_STATE.asset_id=''; TXN_STATE.heldAssets=null; TXN_STATE.sellWarning=null; TXN_SELL_CONFIRMED=false;
-    if(key==='account_id' && (TXN_STATE.action==='SELL' || TXN_STATE.action==='DIVIDEND') && value){
-      loadData('get_held_assets_for_account', {account_id:value}).then(function(r){
-        TXN_STATE.heldAssets = r.assets||[]; renderTxnModalBody();
-      });
-      return;
-    }
+  TXN_STATE.submitError = '';
+  if(key==='action'){
+    QUOTE_SEQ++;
+    TXN_STATE.asset_id=''; TXN_STATE.sellWarning=null; TXN_SELL_CONFIRMED=false;
+    TXN_STATE.price=''; TXN_STATE.priceAuto=false; TXN_STATE.priceHint=''; TXN_STATE.gross_amount=''; TXN_STATE.quantity='';
+    TXN_STATE.accountHint='';
   }
+  if(key==='account_id'){
+    QUOTE_SEQ++;
+    TXN_STATE.sellWarning=null; TXN_SELL_CONFIRMED=false; TXN_STATE.fx=null; TXN_STATE.accountHint='';
+    if(TXN_STATE.action==='SELL' || TXN_STATE.action==='DIVIDEND') TXN_STATE.asset_id='';
+    if(TXN_STATE.priceAuto){ TXN_STATE.price=''; TXN_STATE.priceAuto=false; TXN_STATE.priceHint=''; }
+  }
+  if(key==='asset_id'){
+    QUOTE_SEQ++;
+    TXN_STATE.sellWarning=null; TXN_SELL_CONFIRMED=false;
+    if(TXN_STATE.priceAuto){ TXN_STATE.price=''; TXN_STATE.priceAuto=false; TXN_STATE.priceHint=''; }
+  }
+  if(key==='date') TXN_STATE.fx = null;
+  recomputeTxnGrossAmount();
+  computeSellWarning();
   renderTxnModalBody();
-  refreshComputedChecks();
+  refreshFx();
+  maybePrefillQuote();
 }
+
 function txnAssetSelectHtml(){
-  if(TXN_STATE.action==='DEPOSIT' || TXN_STATE.action==='WITHDRAWAL') return '';
   if(TXN_STATE.action==='SELL' || TXN_STATE.action==='DIVIDEND'){
-    const held = TXN_STATE.heldAssets;
-    if(!TXN_STATE.account_id) return '<p class="hint">Pick an account first.</p>';
-    if(held===null || held===undefined) return '<p class="hint">Loading held positions...</p>';
-    if(!held.length) return '<p class="hint">No open positions in this account.</p>';
+    if(!TXN_STATE.account_id) return '<p class="hint" style="margin-top:0;">Pick an account first.</p>';
+    const held = heldForAccount(TXN_STATE.account_id);
+    if(!held.length) return '<p class="hint" style="margin-top:0;">No open positions in this account.</p>';
     return '<select class="txn-select" onchange="setTxnField(\'asset_id\', this.value)">' +
       '<option value="">Select ticker...</option>' +
-      held.map(function(a){ return '<option value="' + a.asset_id + '"' + (TXN_STATE.asset_id===a.asset_id?' selected':'') + '>' + a.asset_id + ' (' + a.quantity + ' held)</option>'; }).join('') +
+      held.map(function(h){ return '<option value="' + escAttr(h.asset_id) + '"' + (TXN_STATE.asset_id===h.asset_id?' selected':'') + '>' + escAttr(h.asset_id) + ' (' + fmtQty(h.quantity) + ' held)</option>'; }).join('') +
       '</select>';
   }
   return '<div class="txn-asset-wrap">' +
-    '<input type="text" class="txn-input" id="txn-asset-input" placeholder="Type a ticker..." value="' + (TXN_STATE.asset_id||'') + '" ' +
-    'oninput="onTxnAssetInput(this.value)" autocomplete="off">' +
+    '<input type="text" class="txn-input" id="txn-asset-input" placeholder="Type a ticker..." value="' + escAttr(TXN_STATE.asset_id) + '" ' +
+    'oninput="onTxnAssetInput(this.value)" onchange="onTxnAssetCommit()" autocomplete="off">' +
     '<div class="ticker-suggest" id="txn-asset-suggest"></div></div>';
 }
 function onTxnAssetInput(val){
-  TXN_STATE.asset_id = val.toUpperCase();
+  TXN_STATE.asset_id = String(val).toUpperCase();
+  if(TXN_STATE.priceAuto){ TXN_STATE.price=''; TXN_STATE.priceAuto=false; TXN_STATE.priceHint=''; setInputValue('txn-price-input',''); recomputeTxnGrossAmount(); updateTxnComputedArea(); }
   const box = document.getElementById('txn-asset-suggest');
-  if(!box) return;
-  if(!val){ box.classList.remove('show'); box.innerHTML=''; return; }
-  const list = TXN_ALL_ASSETS || [];
-  const needle = val.toUpperCase();
-  const matches = list.filter(function(a){ return a.asset_id.toUpperCase().indexOf(needle)===0; }).slice(0,8);
-  let html = matches.map(function(a){
-    return '<div class="ticker-suggest-row" onmousedown="selectTxnAsset(\'' + a.asset_id.replace(/'/g,"\\'") + '\')">' + a.asset_id + ' - ' + (a.asset_name||'') + '</div>';
-  }).join('');
-  if(!matches.length && val.length>=2){
-    html = '<div class="ticker-suggest-row" onmousedown="selectTxnAsset(\'' + needle.replace(/'/g,"\\'") + '\', true)">+ New ticker: ' + needle + '</div>';
+  if(box){
+    if(!val){ box.classList.remove('show'); box.innerHTML=''; }
+    else {
+      const needle = TXN_STATE.asset_id;
+      const list = (TXN_ALL_ASSETS || []).filter(function(a){ return a.asset_class!=='Benchmark' && a.asset_class!=='Cash'; });
+      const matches = list.filter(function(a){ return a.asset_id.toUpperCase().indexOf(needle)===0; }).slice(0,8);
+      let html = matches.map(function(a){
+        return '<div class="ticker-suggest-row" onmousedown="selectTxnAsset(\'' + a.asset_id.replace(/'/g,"\\'") + '\')">' + escAttr(a.asset_id) + ' - ' + escAttr(a.asset_name||'') + '</div>';
+      }).join('');
+      if(!matches.length && val.length>=2) html = '<div class="ticker-suggest-row" onmousedown="selectTxnAsset(\'' + needle.replace(/'/g,"\\'") + '\')">+ New ticker: ' + escAttr(needle) + '</div>';
+      box.innerHTML = html;
+      box.classList.toggle('show', !!html);
+    }
   }
-  box.innerHTML = html;
-  box.classList.toggle('show', !!html);
+  syncNewTickerFields();
 }
-function selectTxnAsset(assetId, isNew){
+function selectTxnAsset(assetId){
   TXN_STATE.asset_id = assetId;
-  TXN_STATE.newTicker = !!isNew;
+  setInputValue('txn-asset-input', assetId);
   const box = document.getElementById('txn-asset-suggest'); if(box){ box.classList.remove('show'); box.innerHTML=''; }
-  renderTxnModalBody();
-  refreshComputedChecks();
+  onTxnAssetCommit();
 }
+// Runs when a ticker is settled (suggestion tapped, or the field is left). Touches no focused input.
+function onTxnAssetCommit(){
+  if(!TXN_STATE.asset_id) return;
+  QUOTE_SEQ++;
+  suggestAccountFromHistory();
+  syncNewTickerFields();
+  maybePrefillQuote();
+}
+function suggestAccountFromHistory(){
+  if(TXN_STATE.action!=='BUY' || TXN_STATE.account_id || !TXN_STATE.asset_id) return;
+  let best = null;
+  TRANSACTIONS.forEach(function(t){
+    if(t.asset_id===TXN_STATE.asset_id && t.account_id && (best===null || new Date(t.date) > new Date(best.date))) best = t;
+  });
+  if(!best) return;
+  TXN_STATE.account_id = best.account_id;
+  TXN_STATE.accountHint = 'Suggested from your last trade in ' + TXN_STATE.asset_id + ' - change if needed';
+  setInputValue('txn-account-select', best.account_id);
+  refreshFx();
+}
+
+// ---- new-ticker details, suggested from what the sheet already knows ----
+function isNewTickerNow(){
+  return TXN_STATE.action==='BUY' && !!TXN_STATE.asset_id && TXN_ALL_ASSETS!==null &&
+    !TXN_ALL_ASSETS.some(function(a){ return a.asset_id===TXN_STATE.asset_id; });
+}
+function distinctValues(field){
+  const set = {};
+  (TXN_ALL_ASSETS||[]).forEach(function(a){ if(a[field]) set[a[field]] = 1; });
+  return Object.keys(set).sort();
+}
+function modeValue(field, ccy){
+  const counts = {};
+  (TXN_ALL_ASSETS||[]).filter(function(a){ return !ccy || a.currency===ccy; }).forEach(function(a){
+    if(a[field] && a.asset_class!=='Benchmark' && a.asset_class!=='Cash') counts[a[field]] = (counts[a[field]]||0) + 1;
+  });
+  let best = '', n = 0;
+  Object.keys(counts).forEach(function(k){ if(counts[k]>n){ best = k; n = counts[k]; } });
+  return best;
+}
+function syncNewTickerFields(){
+  const box = document.getElementById('txn-newticker');
+  if(!box) return;
+  const isNew = isNewTickerNow();
+  box.style.display = isNew ? 'block' : 'none';
+  if(!isNew) return;
+  const ccy = txnCcy();
+  if(!TXN_STATE.asset_class){ const v = modeValue('asset_class', ccy); if(v){ TXN_STATE.asset_class = v; setInputValue('txn-newclass', v); } }
+  if(!TXN_STATE.exchange){ const v = modeValue('exchange', ccy); if(v){ TXN_STATE.exchange = v; setInputValue('txn-newexch', v); } }
+}
+
+// ---- live rate pre-fill (BUY / SELL) ----
+async function maybePrefillQuote(){
+  const a = TXN_STATE.action;
+  if((a!=='BUY' && a!=='SELL') || !TXN_STATE.asset_id || !TXN_STATE.account_id) return;
+  const seq = ++QUOTE_SEQ;
+  const ccy = txnCcy();
+  const assetId = TXN_STATE.asset_id;
+  TXN_STATE.priceHint = 'Fetching live price...';
+  updateTxnComputedArea();
+  let q = null;
+  try{ q = await loadData('get_quote_for_form', { asset_id: assetId, to_currency: ccy }); }catch(e){ q = null; }
+  if(seq !== QUOTE_SEQ) return; // the user has moved on - drop this answer
+  let price = null, hint = '';
+  if(q && q.success){
+    if(q.price_in_trade_ccy != null){ price = q.price_in_trade_ccy; hint = 'Live price'; }
+    else if(q.currency === ccy){ price = q.price; hint = 'Live price'; }
+    else { hint = 'Live quote is ' + q.price + ' ' + q.currency + ' - enter the ' + ccy + ' rate'; }
+    if(isNewTickerNow() && !TXN_STATE.asset_name && q.company){ TXN_STATE.asset_name = q.company; setInputValue('txn-newname', q.company); }
+  }
+  if(price === null){
+    const h = HOLDINGS.find(function(x){ return x.account_id===TXN_STATE.account_id && x.asset_id===assetId && x.latest_price_trade_ccy!=null; });
+    if(h){ price = h.latest_price_trade_ccy; hint = 'Last known price (live quote unavailable)'; }
+    else if(!hint) hint = "Couldn't fetch a price - enter it manually";
+  }
+  if(price !== null){
+    price = Math.round(price*10000)/10000;
+    if(TXN_STATE.price === ''){
+      TXN_STATE.price = String(price); TXN_STATE.priceAuto = true; setInputValue('txn-price-input', price);
+      hint += ' - edit if needed';
+      recomputeTxnGrossAmount(); computeSellWarning();
+    } else {
+      hint += ': ' + fmtMoney(price, ccy);
+    }
+  }
+  TXN_STATE.priceHint = hint;
+  updateTxnComputedArea();
+}
+
+// ---- FX preview (depends only on account currency + date, so fetched once, not per keystroke) ----
+async function refreshFx(){
+  const ccy = txnCcy(), base = baseCcy(), date = TXN_STATE.date;
+  if(!ccy || ccy===base){ TXN_STATE.fx = null; updateTxnComputedArea(); return; }
+  const key = ccy + '|' + date;
+  if(!FX_CACHE[key]){
+    try{
+      const r = await loadData('get_fx_rate_for_form', { from_currency: ccy, to_currency: base, date: date });
+      if(r.rate) FX_CACHE[key] = { rate: r.rate, isFallback: r.isFallback };
+    }catch(e){ /* preview is a nicety - the server converts at save time regardless */ }
+  }
+  if(txnCcy()===ccy && TXN_STATE.date===date) TXN_STATE.fx = FX_CACHE[key] || null;
+  updateTxnComputedArea();
+}
+
 function recomputeTxnGrossAmount(){
   if(TXN_STATE.action==='BUY' || TXN_STATE.action==='SELL'){
     const q = Number(TXN_STATE.quantity)||0, p = Number(TXN_STATE.price)||0;
-    TXN_STATE.gross_amount = (q*p) ? (q*p).toFixed(2) : '';
+    TXN_STATE.gross_amount = (q*p) ? (q*p).toFixed(4) : '';
   }
 }
-async function refreshTxnPreview(){
-  const account = ACCOUNTS.find(function(a){ return a.account_id===TXN_STATE.account_id; });
-  if(!account || !TXN_STATE.gross_amount){ TXN_STATE.preview=null; return; }
-  const tradeCcy = account.currency;
-  const baseCcy = (CONFIG && CONFIG.base_currency) || 'USD';
-  if(tradeCcy===baseCcy){ TXN_STATE.preview = { base: Number(TXN_STATE.gross_amount), sameCcy:true }; return; }
-  try{
-    const r = await loadData('get_fx_rate_for_form', {from_currency:tradeCcy, to_currency:baseCcy, date:TXN_STATE.date});
-    TXN_STATE.preview = r.rate ? { base: Number(TXN_STATE.gross_amount)/r.rate, isFallback:r.isFallback, sameCcy:false } : null;
-  } catch(e){ TXN_STATE.preview = null; }
-}
-async function checkTxnSellWarning(){
+function computeSellWarning(){
   TXN_STATE.sellWarning = null;
-  if(TXN_STATE.action!=='SELL' || !TXN_STATE.account_id || !TXN_STATE.asset_id || !TXN_STATE.quantity) { return; }
-  try{
-    const r = await loadData('get_current_quantity', {account_id:TXN_STATE.account_id, asset_id:TXN_STATE.asset_id});
-    if(Number(TXN_STATE.quantity) > Number(r.quantity) + 1e-6){
-      TXN_STATE.sellWarning = 'Selling ' + TXN_STATE.quantity + ' but only ' + r.quantity + ' on record in ' + TXN_STATE.account_id + '. Fine for a short sale/options assignment - otherwise double-check.';
-    }
-  } catch(e){ /* non-fatal - server re-checks on submit regardless */ }
+  if(TXN_STATE.action!=='SELL' || !TXN_STATE.account_id || !TXN_STATE.asset_id || !(Number(TXN_STATE.quantity)>0)) return;
+  const held = heldQty(TXN_STATE.account_id, TXN_STATE.asset_id);
+  if(Number(TXN_STATE.quantity) > held + 1e-6){
+    TXN_STATE.sellWarning = 'Selling ' + TXN_STATE.quantity + ' but only ' + fmtQty(held) + ' on record in ' + TXN_STATE.account_id + '. Fine for a short sale or options assignment - otherwise double-check the quantity or account.';
+  }
 }
-async function onTxnNumberChange(){
-  recomputeTxnGrossAmount();
-  await refreshComputedChecks();
+function onTxnNumberChange(){ recomputeTxnGrossAmount(); computeSellWarning(); updateTxnComputedArea(); }
+function fillHeldQty(){
+  const held = heldQty(TXN_STATE.account_id, TXN_STATE.asset_id);
+  TXN_STATE.quantity = String(held); setInputValue('txn-qty-input', held); onTxnNumberChange();
+}
+function fillPlanAmount(){
+  const t = activeTarget(); if(!t) return;
+  const v = Number(t.monthly_contribution_usd); if(!v) return;
+  TXN_STATE.gross_amount = String(v); setInputValue('txn-amount-input', v); onTxnNumberChange();
+}
+
+// ---- hints / preview (small areas only - safe to rewrite while typing) ----
+function txnQtyHintHtml(){
+  if(TXN_STATE.action!=='SELL' || !TXN_STATE.account_id || !TXN_STATE.asset_id) return '';
+  return 'Held: ' + fmtQty(heldQty(TXN_STATE.account_id, TXN_STATE.asset_id)) + ' &middot; <a href="#" onclick="fillHeldQty(); return false;">tap to sell all</a>';
+}
+function txnAmountHintHtml(){
+  const a = TXN_STATE.action;
+  if(a==='DIVIDEND' && TXN_STATE.account_id && TXN_STATE.asset_id) return 'Held: ' + fmtQty(heldQty(TXN_STATE.account_id, TXN_STATE.asset_id)) + ' shares';
+  if(a==='DEPOSIT' && txnCcy()===baseCcy()){
+    const t = activeTarget();
+    if(t && Number(t.monthly_contribution_usd)) return 'Monthly plan: ' + fmtUsd(Number(t.monthly_contribution_usd)) + ' &middot; <a href="#" onclick="fillPlanAmount(); return false;">tap to fill</a>';
+  }
+  return '';
 }
 function txnPreviewHtml(){
-  if(!TXN_STATE.preview || TXN_STATE.preview.sameCcy) return '';
-  return '<div class="txn-preview">&asymp; ' + fmtUsd(TXN_STATE.preview.base) + ' <b>' + ((CONFIG&&CONFIG.base_currency)||'USD') + '</b>' +
-    (TXN_STATE.preview.isFallback?' (nearest available FX rate, not same-day)':'') + '</div>';
+  const ccy = txnCcy(), g = Number(TXN_STATE.gross_amount);
+  if(!ccy || !(g>0)) return '';
+  const parts = [];
+  if(TXN_STATE.action==='BUY' || TXN_STATE.action==='SELL') parts.push('Trade value: <b>' + fmtMoney(g, ccy) + '</b>');
+  if(ccy!==baseCcy() && TXN_STATE.fx) parts.push('&asymp; ' + fmtUsd(g / TXN_STATE.fx.rate) + ' <b>' + baseCcy() + '</b>' + (TXN_STATE.fx.isFallback ? ' (nearest available FX rate, not same-day)' : ''));
+  return parts.length ? '<div class="txn-preview">' + parts.join(' &middot; ') + '</div>' : '';
 }
 function txnWarningHtml(){
   if(!TXN_STATE.sellWarning) return '';
-  return '<div class="txn-warning">' + TXN_STATE.sellWarning + '</div>' +
+  return '<div class="txn-warning">' + escAttr(TXN_STATE.sellWarning) + '</div>' +
     '<div class="txn-confirm-row"><input type="checkbox" id="txn-confirm-cb" ' + (TXN_SELL_CONFIRMED?'checked':'') + ' onchange="TXN_SELL_CONFIRMED=this.checked; updateTxnComputedArea();"> <label for="txn-confirm-cb">Yes, proceed anyway</label></div>';
 }
+function setHtmlIfPresent(id, html){ const el = document.getElementById(id); if(el) el.innerHTML = html; }
 function updateTxnComputedArea(){
-  const pv = document.getElementById('txn-preview-area'); if(pv) pv.innerHTML = txnPreviewHtml();
-  const wn = document.getElementById('txn-warning-area'); if(wn) wn.innerHTML = txnWarningHtml();
+  setHtmlIfPresent('txn-preview-area', txnPreviewHtml());
+  setHtmlIfPresent('txn-warning-area', txnWarningHtml());
+  setHtmlIfPresent('txn-qty-hint', txnQtyHintHtml());
+  setHtmlIfPresent('txn-price-hint', escAttr(TXN_STATE.priceHint));
+  setHtmlIfPresent('txn-amount-hint', txnAmountHintHtml());
+  setHtmlIfPresent('txn-account-hint', escAttr(TXN_STATE.accountHint));
+  setHtmlIfPresent('txn-wl-hint', escAttr(TXN_STATE.wlHint));
   const btn = document.getElementById('txn-submit-btn'); if(btn) btn.disabled = !txnCanSubmit();
 }
 function txnCanSubmit(){
-  if(TXN_STATE.action==='WATCHLIST') return !!(TXN_STATE.ticker && TXN_STATE.entry_high);
+  const a = TXN_STATE.action;
+  if(a==='WATCHLIST') return !!(TXN_STATE.ticker && Number(TXN_STATE.entry_high) > 0);
   if(!TXN_STATE.account_id) return false;
-  if((TXN_STATE.action==='BUY'||TXN_STATE.action==='SELL'||TXN_STATE.action==='DIVIDEND') && !TXN_STATE.asset_id) return false;
-  if((TXN_STATE.action==='BUY'||TXN_STATE.action==='SELL') && (!TXN_STATE.quantity || !TXN_STATE.price)) return false;
-  if(!TXN_STATE.gross_amount) return false;
+  if((a==='BUY'||a==='SELL'||a==='DIVIDEND') && !TXN_STATE.asset_id) return false;
+  if((a==='BUY'||a==='SELL') && !(Number(TXN_STATE.quantity)>0 && Number(TXN_STATE.price)>0)) return false;
+  if(!(Number(TXN_STATE.gross_amount)>0)) return false;
   if(TXN_STATE.sellWarning && !TXN_SELL_CONFIRMED) return false;
   return true;
 }
+
+// ---- watchlist entry: look the ticker up so company / sector / current price show as you type ----
+async function onWlTickerChange(){
+  if(TXN_STATE.action!=='WATCHLIST') return;
+  const t = String(TXN_STATE.yahoo_id || TXN_STATE.ticker || '').trim();
+  if(!t) return;
+  const seq = ++QUOTE_SEQ;
+  TXN_STATE.wlHint = 'Looking up ' + t + '...';
+  updateTxnComputedArea();
+  let q = null;
+  try{ q = await loadData('get_quote_for_form', { symbol: t, profile: 'true' }); }catch(e){ q = null; }
+  if(seq!==QUOTE_SEQ || TXN_STATE.action!=='WATCHLIST') return;
+  if(q && q.success){
+    if(!TXN_STATE.company && q.company){ TXN_STATE.company = q.company; setInputValue('txn-wl-company', q.company); }
+    const sec = q.sector ? (q.industry ? (q.sector + ' / ' + q.industry) : q.sector) : '';
+    if(!TXN_STATE.sector && sec){ TXN_STATE.sector = sec; setInputValue('txn-wl-sector', sec); }
+    TXN_STATE.wlHint = 'Current ' + fmtMoney(q.price, q.currency) +
+      ((q.week52_low && q.week52_high) ? (' - 52w range ' + fmtMoney(q.week52_low, q.currency) + ' to ' + fmtMoney(q.week52_high, q.currency)) : '') +
+      ' - set your entry zone with this in mind';
+  } else {
+    TXN_STATE.wlHint = "Couldn't find a live quote for " + t + ". For Indian stocks, put the NSE symbol in Yahoo symbol (e.g. RELIANCE.NS).";
+  }
+  updateTxnComputedArea();
+}
+
+// ---- Save ----
+function failSave(msg){
+  TXN_STATE.submitError = msg;
+  renderTxnModalBody();
+  const card = document.querySelector('#txn-modal-overlay .txn-modal'); if(card) card.scrollTop = 0;
+  if(/access key/i.test(msg)){ closeTxnModal(); lockNow('Your access key was rejected - please sign in again.'); return; }
+  showToast('\u2717 Not saved - ' + msg, 'error');
+}
 async function submitTxn(){
+  if(!txnCanSubmit()) return;
   const btn = document.getElementById('txn-submit-btn');
   if(btn){ btn.disabled = true; btn.textContent = 'Saving...'; }
-
-  if(TXN_STATE.action==='WATCHLIST'){
-    try{
-      const r = await loadData('add_watchlist_item', {
-        ticker: TXN_STATE.ticker, company: TXN_STATE.company||'', sector: TXN_STATE.sector||'',
-        entry_low: TXN_STATE.entry_low||'', entry_high: TXN_STATE.entry_high,
-        priority: TXN_STATE.priority||'', notes: TXN_STATE.notes||'',
-      });
-      if(!r.success){ TXN_STATE.submitError = r.error||'Unknown error'; renderTxnModalBody(); return; }
-      closeTxnModal();
-      if(ACTIVE_TAB==='watchlist') loadWatchlist();
-    } catch(err){
-      TXN_STATE.submitError = err.message; renderTxnModalBody();
-    }
-    return;
-  }
-
-  const params = {
-    action: TXN_STATE.action, account_id: TXN_STATE.account_id, asset_id: TXN_STATE.asset_id||'',
-    date: TXN_STATE.date, quantity: TXN_STATE.quantity||'', price: TXN_STATE.price||'',
-    gross_amount: TXN_STATE.gross_amount, notes: TXN_STATE.notes||'',
-    confirmSellWarning: TXN_SELL_CONFIRMED ? 'true' : 'false',
-  };
-  if(TXN_STATE.newTicker){
-    params.asset_name = TXN_STATE.asset_name || TXN_STATE.asset_id;
-    params.asset_class = TXN_STATE.asset_class || 'Equity';
-    params.exchange = TXN_STATE.exchange || '';
-  }
+  const isWl = TXN_STATE.action==='WATCHLIST';
   try{
+    if(isWl){
+      const r = await loadData('add_watchlist_item', {
+        ticker: TXN_STATE.ticker, yahoo_id: TXN_STATE.yahoo_id||'', company: TXN_STATE.company||'', sector: TXN_STATE.sector||'',
+        entry_low: TXN_STATE.entry_low||'', entry_high: TXN_STATE.entry_high, priority: TXN_STATE.priority||'', notes: TXN_STATE.notes||'',
+      });
+      if(!r.success){ failSave(r.error||'Unknown error'); return; }
+      closeTxnModal();
+      showToast('\u2713 ' + (r.ticker||TXN_STATE.ticker) + ' added to your watchlist' + (r.company ? (' - ' + r.company) : ''), 'success');
+      switchTab('watchlist');
+      return;
+    }
+    const params = {
+      txn_action: TXN_STATE.action, account_id: TXN_STATE.account_id, asset_id: TXN_STATE.asset_id||'',
+      date: TXN_STATE.date, quantity: TXN_STATE.quantity||'', price: TXN_STATE.price||'',
+      gross_amount: TXN_STATE.gross_amount, notes: TXN_STATE.notes||'',
+      confirmSellWarning: TXN_SELL_CONFIRMED ? 'true' : 'false',
+    };
+    if(isNewTickerNow()){
+      params.asset_name = TXN_STATE.asset_name || TXN_STATE.asset_id;
+      params.asset_class = TXN_STATE.asset_class || '';
+      params.exchange = TXN_STATE.exchange || '';
+    }
     const r = await loadData('create_transaction', params);
-    if(r.needsConfirmation){ TXN_STATE.sellWarning = r.warning; renderTxnModalBody(); return; }
-    if(!r.success){ TXN_STATE.submitError = r.error||'Unknown error'; renderTxnModalBody(); return; }
+    if(r.needsConfirmation){
+      TXN_STATE.sellWarning = r.warning; renderTxnModalBody();
+      showToast('Please confirm the warning below, then save again.', 'error');
+      return;
+    }
+    if(!r.success){ failSave(r.error||'Unknown error'); return; }
     closeTxnModal();
+    const feeTxt = (r.fees && Number(r.fees)>0) ? (' - fees ' + fmtMoney(Number(r.fees), r.trade_currency)) : '';
+    const what = r.txn_action + ' ' + (r.asset_id ? (r.asset_id + ' ') : '') + fmtMoney(Number(r.gross_amount), r.trade_currency);
+    showToast('\u2713 ' + what + ' recorded (' + r.transaction_id + ')' + feeTxt, 'success');
+    switchTab('portfolio');
     await fullLoad(false);
   } catch(err){
-    TXN_STATE.submitError = err.message; renderTxnModalBody();
+    failSave(err.message);
   }
+}
+
+// ---- rendering ----
+function fld(label, inner, hintId){
+  return '<div class="txn-field"><label class="txn-label">' + label + '</label>' + inner +
+    (hintId ? ('<div class="txn-hint" id="' + hintId + '"></div>') : '') + '</div>';
 }
 function renderTxnModalBody(){
   const el = document.getElementById('txn-modal-body');
   if(!el) return;
-  document.getElementById('txn-modal-title').firstChild.textContent = TXN_STATE.action==='WATCHLIST' ? 'Add to Watchlist' : 'Add Transaction';
-  const isWatchlist = TXN_STATE.action==='WATCHLIST';
-  const showQtyPrice = TXN_STATE.action==='BUY' || TXN_STATE.action==='SELL';
-  const showAmountOnly = TXN_STATE.action==='DEPOSIT' || TXN_STATE.action==='WITHDRAWAL' || TXN_STATE.action==='DIVIDEND';
+  const a = TXN_STATE.action;
+  const titleEl = document.getElementById('txn-modal-title');
+  if(titleEl && titleEl.firstChild) titleEl.firstChild.textContent = a==='WATCHLIST' ? 'Add to Watchlist' : 'Add Transaction';
+  let html = TXN_STATE.submitError ? ('<div class="txn-error">' + escAttr(TXN_STATE.submitError) + '</div>') : '';
+  html += fld('ACTION', '<select class="txn-select" onchange="setTxnField(\'action\', this.value)">' +
+    TXN_ACTIONS.map(function(x){ return '<option value="' + x + '"' + (a===x?' selected':'') + '>' + (x==='WATCHLIST'?'Watchlist':x) + '</option>'; }).join('') + '</select>');
 
-  if(isWatchlist){
-    el.innerHTML =
-      '<div class="txn-field"><label class="txn-label">ACTION</label>' +
-      '<select class="txn-select" onchange="setTxnField(\'action\', this.value)">' +
-      ['BUY','SELL','DIVIDEND','DEPOSIT','WITHDRAWAL','WATCHLIST'].map(function(a){ return '<option value="' + a + '"' + (TXN_STATE.action===a?' selected':'') + '>' + (a==='WATCHLIST'?'Watchlist':a) + '</option>'; }).join('') +
-      '</select></div>' +
-      '<div class="txn-field"><label class="txn-label">TICKER</label><input type="text" class="txn-input" style="text-transform:uppercase;" value="' + (TXN_STATE.ticker||'') + '" oninput="TXN_STATE.ticker=this.value.toUpperCase()"></div>' +
-      '<div class="txn-field"><label class="txn-label">COMPANY (optional)</label><input class="txn-input" value="' + (TXN_STATE.company||'') + '" oninput="TXN_STATE.company=this.value"></div>' +
-      '<div class="txn-field"><label class="txn-label">SECTOR (optional)</label><input class="txn-input" value="' + (TXN_STATE.sector||'') + '" oninput="TXN_STATE.sector=this.value"></div>' +
-      '<div class="txn-field"><label class="txn-label">ENTRY LOW (optional)</label><input type="number" step="any" class="txn-input" value="' + (TXN_STATE.entry_low||'') + '" oninput="TXN_STATE.entry_low=this.value; updateTxnComputedArea();"></div>' +
-      '<div class="txn-field"><label class="txn-label">ENTRY HIGH</label><input type="number" step="any" class="txn-input" value="' + (TXN_STATE.entry_high||'') + '" oninput="TXN_STATE.entry_high=this.value; updateTxnComputedArea();"></div>' +
-      '<div class="txn-field"><label class="txn-label">PRIORITY (optional)</label><input class="txn-input" placeholder="e.g. PATIENT, URGENT" value="' + (TXN_STATE.priority||'') + '" oninput="TXN_STATE.priority=this.value"></div>' +
-      '<div class="txn-field"><label class="txn-label">NOTES (optional)</label><input class="txn-input" value="' + (TXN_STATE.notes||'') + '" oninput="TXN_STATE.notes=this.value"></div>' +
-      (TXN_STATE.submitError ? ('<div class="txn-error">' + TXN_STATE.submitError + '</div>') : '') +
-      '<button class="txn-submit-btn" id="txn-submit-btn" ' + (txnCanSubmit()?'':'disabled') + ' onclick="submitTxn()">Save to watchlist</button>';
+  if(a==='WATCHLIST'){
+    html += fld('TICKER', '<input type="text" class="txn-input" style="text-transform:uppercase;" value="' + escAttr(TXN_STATE.ticker) + '" oninput="TXN_STATE.ticker=this.value.toUpperCase(); updateTxnComputedArea();" onchange="onWlTickerChange()" autocomplete="off">');
+    html += fld('YAHOO SYMBOL (optional)', '<input class="txn-input" style="text-transform:uppercase;" placeholder="only if different - e.g. RELIANCE.NS" value="' + escAttr(TXN_STATE.yahoo_id) + '" oninput="TXN_STATE.yahoo_id=this.value.toUpperCase()" onchange="onWlTickerChange()" autocomplete="off">');
+    html += fld('COMPANY (filled in automatically if left blank)', '<input class="txn-input" id="txn-wl-company" value="' + escAttr(TXN_STATE.company) + '" oninput="TXN_STATE.company=this.value">');
+    html += fld('SECTOR (filled in automatically if left blank)', '<input class="txn-input" id="txn-wl-sector" value="' + escAttr(TXN_STATE.sector) + '" oninput="TXN_STATE.sector=this.value">');
+    html += '<div class="txn-hint" id="txn-wl-hint" style="margin:-4px 0 12px;"></div>';
+    html += fld('ENTRY LOW (optional)', '<input type="number" step="any" inputmode="decimal" class="txn-input" value="' + escAttr(TXN_STATE.entry_low) + '" oninput="TXN_STATE.entry_low=this.value">');
+    html += fld('ENTRY HIGH', '<input type="number" step="any" inputmode="decimal" class="txn-input" value="' + escAttr(TXN_STATE.entry_high) + '" oninput="TXN_STATE.entry_high=this.value; updateTxnComputedArea();">');
+    html += fld('PRIORITY (optional)', '<input class="txn-input" placeholder="e.g. PATIENT, URGENT" value="' + escAttr(TXN_STATE.priority) + '" oninput="TXN_STATE.priority=this.value">');
+    html += fld('NOTES (optional)', '<input class="txn-input" value="' + escAttr(TXN_STATE.notes) + '" oninput="TXN_STATE.notes=this.value">');
+    html += '<button class="txn-submit-btn" id="txn-submit-btn" onclick="submitTxn()">Save to watchlist</button>';
+    el.innerHTML = html;
+    updateTxnComputedArea();
     return;
   }
 
-  el.innerHTML =
-    '<div class="txn-field"><label class="txn-label">ACTION</label>' +
-    '<select class="txn-select" onchange="setTxnField(\'action\', this.value)">' +
-    ['BUY','SELL','DIVIDEND','DEPOSIT','WITHDRAWAL','WATCHLIST'].map(function(a){ return '<option value="' + a + '"' + (TXN_STATE.action===a?' selected':'') + '>' + (a==='WATCHLIST'?'Watchlist':a) + '</option>'; }).join('') +
-    '</select></div>' +
-    '<div class="txn-field"><label class="txn-label">ACCOUNT</label>' +
-    '<select class="txn-select" onchange="setTxnField(\'account_id\', this.value)">' + txnAccountOptions() + '</select></div>' +
-    ((TXN_STATE.action!=='DEPOSIT' && TXN_STATE.action!=='WITHDRAWAL') ? ('<div class="txn-field"><label class="txn-label">TICKER</label>' + txnAssetSelectHtml() + '</div>') : '') +
-    (TXN_STATE.newTicker ? (
-      '<div class="txn-new-ticker-fields">' +
-      '<div class="txn-field"><label class="txn-label">NAME</label><input class="txn-input" value="' + (TXN_STATE.asset_name||'') + '" oninput="TXN_STATE.asset_name=this.value"></div>' +
-      '<div class="txn-field"><label class="txn-label">ASSET CLASS</label><input class="txn-input" value="' + (TXN_STATE.asset_class||'Equity') + '" oninput="TXN_STATE.asset_class=this.value"></div>' +
-      '<div class="txn-field"><label class="txn-label">EXCHANGE</label><input class="txn-input" value="' + (TXN_STATE.exchange||'') + '" oninput="TXN_STATE.exchange=this.value"></div>' +
-      '</div>'
-    ) : '') +
-    '<div class="txn-field"><label class="txn-label">DATE</label><input type="date" class="txn-input" value="' + TXN_STATE.date + '" onchange="setTxnField(\'date\', this.value)"></div>' +
-    (showQtyPrice ? (
-      '<div class="txn-field"><label class="txn-label">QUANTITY</label><input type="number" step="any" class="txn-input" value="' + TXN_STATE.quantity + '" oninput="TXN_STATE.quantity=this.value; onTxnNumberChange();"></div>' +
-      '<div class="txn-field"><label class="txn-label">PRICE (per unit)</label><input type="number" step="any" class="txn-input" value="' + TXN_STATE.price + '" oninput="TXN_STATE.price=this.value; onTxnNumberChange();"></div>'
-    ) : '') +
-    (showAmountOnly ? (
-      '<div class="txn-field"><label class="txn-label">AMOUNT</label><input type="number" step="any" class="txn-input" value="' + TXN_STATE.gross_amount + '" oninput="TXN_STATE.gross_amount=this.value; onTxnNumberChange();"></div>'
-    ) : '') +
-    '<div id="txn-preview-area">' + txnPreviewHtml() + '</div>' +
-    '<div id="txn-warning-area">' + txnWarningHtml() + '</div>' +
-    '<div class="txn-field"><label class="txn-label">NOTES (optional)</label><input class="txn-input" value="' + (TXN_STATE.notes||'') + '" oninput="TXN_STATE.notes=this.value"></div>' +
-    (TXN_STATE.submitError ? ('<div class="txn-error">' + TXN_STATE.submitError + '</div>') : '') +
-    '<button class="txn-submit-btn" id="txn-submit-btn" ' + (txnCanSubmit()?'':'disabled') + ' onclick="submitTxn()">Save transaction</button>';
+  const ccy = txnCcy();
+  html += fld('ACCOUNT', '<select class="txn-select" id="txn-account-select" onchange="setTxnField(\'account_id\', this.value)">' + txnAccountOptions() + '</select>', 'txn-account-hint');
+  if(a!=='DEPOSIT' && a!=='WITHDRAWAL') html += fld('TICKER', txnAssetSelectHtml());
+  if(a==='BUY'){
+    html += '<div id="txn-newticker" class="txn-new-ticker-fields" style="display:' + (isNewTickerNow() ? 'block' : 'none') + ';">' +
+      '<p class="hint" style="margin:0 0 8px;">New ticker - suggested from your other holdings in this currency. Correct anything that is wrong.</p>' +
+      fld('NAME', '<input class="txn-input" id="txn-newname" value="' + escAttr(TXN_STATE.asset_name) + '" oninput="TXN_STATE.asset_name=this.value">') +
+      fld('ASSET CLASS', '<input class="txn-input" id="txn-newclass" list="dl-asset-class" value="' + escAttr(TXN_STATE.asset_class) + '" oninput="TXN_STATE.asset_class=this.value">') +
+      fld('EXCHANGE', '<input class="txn-input" id="txn-newexch" list="dl-exchange" value="' + escAttr(TXN_STATE.exchange) + '" oninput="TXN_STATE.exchange=this.value">') +
+      '<datalist id="dl-asset-class">' + distinctValues('asset_class').map(function(v){ return '<option value="' + escAttr(v) + '">'; }).join('') + '</datalist>' +
+      '<datalist id="dl-exchange">' + distinctValues('exchange').map(function(v){ return '<option value="' + escAttr(v) + '">'; }).join('') + '</datalist>' +
+      '</div>';
+  }
+  html += fld('DATE', '<input type="date" class="txn-input" value="' + escAttr(TXN_STATE.date) + '" onchange="setTxnField(\'date\', this.value)">');
+  if(a==='BUY' || a==='SELL'){
+    html += fld('QUANTITY', '<input type="number" step="any" inputmode="decimal" class="txn-input" id="txn-qty-input" value="' + escAttr(TXN_STATE.quantity) + '" oninput="TXN_STATE.quantity=this.value; onTxnNumberChange();">', 'txn-qty-hint');
+    html += fld('PRICE' + (ccy ? (' (' + escAttr(ccy) + ' per unit)') : ' (per unit)'), '<input type="number" step="any" inputmode="decimal" class="txn-input" id="txn-price-input" value="' + escAttr(TXN_STATE.price) + '" oninput="TXN_STATE.price=this.value; TXN_STATE.priceAuto=false; onTxnNumberChange();">', 'txn-price-hint');
+  } else {
+    html += fld('AMOUNT' + (ccy ? (' (' + escAttr(ccy) + ')') : ''), '<input type="number" step="any" inputmode="decimal" class="txn-input" id="txn-amount-input" value="' + escAttr(TXN_STATE.gross_amount) + '" oninput="TXN_STATE.gross_amount=this.value; onTxnNumberChange();">', 'txn-amount-hint');
+  }
+  html += '<div id="txn-preview-area"></div><div id="txn-warning-area"></div>';
+  html += fld('NOTES (optional)', '<input class="txn-input" value="' + escAttr(TXN_STATE.notes) + '" oninput="TXN_STATE.notes=this.value">');
+  html += '<button class="txn-submit-btn" id="txn-submit-btn" onclick="submitTxn()">Save transaction</button>';
+  el.innerHTML = html;
+  updateTxnComputedArea();
 }
 </script>
 </body>
