@@ -24,6 +24,7 @@
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--text);font-family:var(--mono);padding:36px 16px 90px;min-height:100vh;}
+  input[type="date"]{color-scheme:dark;}
   .wrap{max-width:640px;margin:0 auto;}
   .page-title{font-size:11px;letter-spacing:.12em;color:var(--text-faint);margin-bottom:4px;}
   .refresh-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;gap:10px;}
@@ -243,7 +244,7 @@
     border:1px solid var(--border);border-radius:7px;padding:8px 14px;cursor:pointer;}
   .tab-btn.active{color:var(--gold-bright);border-color:var(--gold);background:rgba(201,162,39,.08);}
 
-  .alert-banner{position:fixed;top:16px;left:16px;right:16px;max-width:390px;margin:0 auto;z-index:950;
+  .alert-banner{position:fixed;top:16px;left:16px;right:16px;max-width:390px;max-height:70vh;overflow-y:auto;margin:0 auto;z-index:950;
     background:var(--surface);border:1px solid var(--gold);border-radius:12px;padding:14px 16px;
     box-shadow:0 8px 28px rgba(0,0,0,.5);display:flex;gap:12px;align-items:flex-start;
     transform:translateY(-140%);opacity:0;transition:transform .3s cubic-bezier(.2,.9,.3,1.3), opacity .25s ease;
@@ -251,9 +252,12 @@
   .alert-banner.show{transform:translateY(0);opacity:1;pointer-events:auto;}
   .alert-icon{width:32px;height:32px;border-radius:50%;background:rgba(201,162,39,.15);color:var(--gold-bright);
     flex:none;display:flex;align-items:center;justify-content:center;font-size:15px;}
-  .alert-body{flex:1;min-width:0;}
-  .alert-title{font-size:11.5px;font-weight:600;color:var(--gold-bright);margin-bottom:2px;}
+  .alert-body{flex:1;min-width:0;cursor:pointer;}
+  .alert-title{font-size:11.5px;font-weight:600;color:var(--gold-bright);margin-bottom:4px;}
   .alert-text{font-size:10.5px;color:var(--text-dim);line-height:1.5;}
+  .alert-line{padding:2px 0;}
+  .alert-zone{color:var(--text-faint);}
+  .alert-open{font-size:9px;color:var(--text-faint);margin-top:6px;text-decoration:underline;}
   .alert-close{background:none;border:none;color:var(--text-faint);font-size:16px;cursor:pointer;flex:none;}
 
   .wl-row{display:flex;align-items:center;gap:10px;padding:13px 14px;background:var(--surface);
@@ -321,6 +325,7 @@
   .toast.error{border-color:var(--red);}
   .txn-hint{font-size:9.5px;color:var(--text-faint);margin-top:4px;line-height:1.5;}
   .txn-hint a{color:var(--gold-bright);}
+  .txn-hint .bad{color:var(--red);}
   .is-family #refresh-btn, .is-family #fab-stack, .is-family .price-edit-row{display:none !important;}
 </style>
 </head>
@@ -329,8 +334,7 @@
   <div class="lock-card">
     <div class="lock-title">Sijo Portfolio</div>
     <div class="lock-sub">Enter your access key to continue.</div>
-    <input type="password" class="lock-input" id="lock-key-input" placeholder="Access key" autocomplete="off"
-      onkeydown="if(event.key==='Enter') submitAccessKey()">
+    <input type="password" class="lock-input" id="lock-key-input" placeholder="Access key" autocomplete="off">
     <button class="lock-submit" onclick="submitAccessKey()">Unlock</button>
     <div class="lock-error" id="lock-error"></div>
   </div>
@@ -360,9 +364,10 @@
 <div class="toast" id="toast"></div>
 <div class="alert-banner" id="alert-banner">
   <div class="alert-icon">🎯</div>
-  <div class="alert-body">
+  <div class="alert-body" onclick="openWatchlistFromAlert()">
     <div class="alert-title" id="alert-title">Watchlist target hit</div>
     <div class="alert-text" id="alert-text"></div>
+    <div class="alert-open">Tap to open watchlist</div>
   </div>
   <button class="alert-close" onclick="hideAlertBanner()">&times;</button>
 </div>
@@ -901,7 +906,6 @@ function sliceLocalStr(dim, label, allData){
     return fmtMoney(localTotal, currencies[0]);
   }
   return '';
-  return fmtMoney(localTotal, label);
 }
 function onSliceClick(dim, value){
   const idx = filterChain.findIndex(function(f){ return f.dim===dim; });
@@ -1298,6 +1302,10 @@ async function submitAccessKey(){
     errEl.textContent = 'Incorrect key - try again.';
   }
 }
+// Enter key unlocks (laptop keyboard), same as clicking the Unlock button.
+document.getElementById('lock-key-input').addEventListener('keydown', function(e){
+  if(e.key === 'Enter' || e.keyCode === 13){ e.preventDefault(); submitAccessKey(); }
+});
 // Called if a key that worked at page load gets rejected mid-session (e.g. the
 // owner rotated access_key_owner/family in the sheet while this tab was open).
 // Re-shows the lock screen with an explanatory message instead of leaving the
@@ -1373,30 +1381,49 @@ async function removeWatchlistItem(id){
 }
 
 // ---- Alert banner ----
+// Lists EVERY watchlist ticker currently in its buy zone (not just the first).
+// Closing it remembers which tickers you have seen, for this browser session, so
+// it stays quiet until a NEW ticker enters its zone. A ticker that leaves its
+// zone is forgotten, so it alerts again if it comes back.
+let ALERT_SEEN = [];
+try{ ALERT_SEEN = JSON.parse(sessionStorage.getItem('wl_alert_seen') || '[]'); }catch(e){ ALERT_SEEN = []; }
+let ALERT_CURRENT = [];
+function saveAlertSeen(){ try{ sessionStorage.setItem('wl_alert_seen', JSON.stringify(ALERT_SEEN)); }catch(e){} }
 function checkWatchlistAlerts(list){
-  const inZone = list.filter(w=>w.in_zone);
-  if(!inZone.length) return;
-  const first = inZone[0];
-  const more = inZone.length>1 ? (' (+' + (inZone.length-1) + ' more)') : '';
-  document.getElementById('alert-title').textContent = inZone.length>1 ? 'Watchlist targets in zone' : 'Watchlist target in zone';
-  document.getElementById('alert-text').innerHTML = '<b>' + first.ticker + '</b> is at ' + maskable(fmtMoney(first.current_price, first.price_currency)) +
-    ' - in your buy zone (up to ' + maskable(fmtMoney(first.entry_high, first.price_currency)) + ').' + more;
+  const inZone = (list || []).filter(function(w){ return w.in_zone; });
+  ALERT_CURRENT = inZone.map(function(w){ return w.ticker; });
+  ALERT_SEEN = ALERT_SEEN.filter(function(t){ return ALERT_CURRENT.indexOf(t) !== -1; });
+  saveAlertSeen();
+  if(!inZone.length){ document.getElementById('alert-banner').classList.remove('show'); return; }
+  const hasNew = inZone.some(function(w){ return ALERT_SEEN.indexOf(w.ticker) === -1; });
+  if(!hasNew) return; // everything in zone was already seen and dismissed - stay quiet
+  document.getElementById('alert-title').textContent = inZone.length > 1 ? (inZone.length + ' watchlist targets in zone') : 'Watchlist target in zone';
+  document.getElementById('alert-text').innerHTML = inZone.map(function(w){
+    return '<div class="alert-line"><b>' + escAttr(w.ticker) + '</b> ' + maskable(fmtMoney(w.current_price, w.price_currency)) +
+      ' <span class="alert-zone">(buy up to ' + maskable(fmtMoney(w.entry_high, w.price_currency)) + ')</span></div>';
+  }).join('');
   document.getElementById('alert-banner').classList.add('show');
 }
 function hideAlertBanner(){
   document.getElementById('alert-banner').classList.remove('show');
+  ALERT_CURRENT.forEach(function(t){ if(ALERT_SEEN.indexOf(t) === -1) ALERT_SEEN.push(t); });
+  saveAlertSeen();
+}
+function openWatchlistFromAlert(){
+  hideAlertBanner();
+  switchTab('watchlist');
 }
 
-// Cursor-jump-bug note: quantity/price/amount typing NEVER triggers a full
-// modal re-render - only #txn-preview-area / #txn-warning-area / the submit
-// button's disabled state get rewritten (see updateTxnComputedArea). Same
+// Cursor-jump-bug note: quantity/price/amount/date typing NEVER triggers a full
+// modal re-render - only #txn-preview-area / #txn-warning-area / the hint lines / the
+// submit button's disabled state get rewritten (see updateTxnComputedArea). Same
 // "stable input, isolated results div" pattern already proven bug-free on
 // the closed-positions ticker filter elsewhere in this file.
 // ---- Add Transaction / Watchlist modal (ONE form, six actions) ----
 // How this form behaves:
 //  * Pre-filled values are SUGGESTIONS - always editable, and never overwrite something you already typed.
-//  * Typing in quantity/price/amount/notes never rebuilds the form (only small hint/preview areas update),
-//    so the phone keyboard is never dismissed mid-typing - same fix proven on the closed-positions filter.
+//  * Typing never rebuilds the form (only small hint/preview areas update),
+//    so the keyboard is never dismissed mid-typing and a half-typed date is never wiped.
 //  * Nothing is hardcoded: accounts, tickers, asset classes and exchanges all come from the sheet.
 //  * On Save: SUCCESS -> the form closes, a green toast says exactly what was recorded, and you land on the
 //    tab where the result shows (Portfolio for a transaction, Watchlist for a watchlist add).
@@ -1435,13 +1462,13 @@ function showToast(msg, type){
   el.textContent = msg;
   el.className = 'toast show ' + (type||'success');
   clearTimeout(TOAST_TIMER);
-  TOAST_TIMER = setTimeout(function(){ el.classList.remove('show'); }, type==='error' ? 8000 : 4500);
+  TOAST_TIMER = setTimeout(function(){ el.classList.remove('show'); }, type==='error' ? 8000 : 6000);
 }
 
 function openTxnModal(){
   TXN_STATE = { action: ACTIVE_TAB==='watchlist' ? 'WATCHLIST' : 'BUY', account_id:'', asset_id:'', date: localDateStr(new Date()),
     quantity:'', price:'', gross_amount:'', notes:'', priceAuto:false, priceHint:'', accountHint:'',
-    asset_name:'', asset_class:'', exchange:'',
+    asset_name:'', asset_class:'', exchange:'', decision_id:'',
     ticker:'', yahoo_id:'', company:'', sector:'', entry_low:'', entry_high:'', priority:'', wlHint:'',
     sellWarning:null, fx:null, submitError:'' };
   TXN_SELL_CONFIRMED = false;
@@ -1449,7 +1476,7 @@ function openTxnModal(){
   document.getElementById('txn-modal-overlay').classList.add('show');
   renderTxnModalBody();
   if(TXN_ALL_ASSETS===null){
-    loadData('get_all_assets_for_form').then(function(r){ TXN_ALL_ASSETS = r.assets||[]; syncNewTickerFields(); }).catch(function(){ TXN_ALL_ASSETS = []; });
+    loadData('get_all_assets_for_form').then(function(r){ TXN_ALL_ASSETS = r.assets||[]; syncNewTickerFields(); syncDecisionArea(); }).catch(function(){ TXN_ALL_ASSETS = []; });
   }
 }
 function closeTxnModal(){
@@ -1467,27 +1494,62 @@ function setTxnField(key, value){
   TXN_STATE.submitError = '';
   if(key==='action'){
     QUOTE_SEQ++;
-    TXN_STATE.asset_id=''; TXN_STATE.sellWarning=null; TXN_SELL_CONFIRMED=false;
+    TXN_STATE.asset_id=''; TXN_STATE.sellWarning=null; TXN_SELL_CONFIRMED=false; TXN_STATE.decision_id='';
     TXN_STATE.price=''; TXN_STATE.priceAuto=false; TXN_STATE.priceHint=''; TXN_STATE.gross_amount=''; TXN_STATE.quantity='';
     TXN_STATE.accountHint='';
   }
   if(key==='account_id'){
     QUOTE_SEQ++;
     TXN_STATE.sellWarning=null; TXN_SELL_CONFIRMED=false; TXN_STATE.fx=null; TXN_STATE.accountHint='';
-    if(TXN_STATE.action==='SELL' || TXN_STATE.action==='DIVIDEND') TXN_STATE.asset_id='';
+    if(TXN_STATE.action==='SELL' || TXN_STATE.action==='DIVIDEND'){ TXN_STATE.asset_id=''; TXN_STATE.decision_id=''; }
     if(TXN_STATE.priceAuto){ TXN_STATE.price=''; TXN_STATE.priceAuto=false; TXN_STATE.priceHint=''; }
   }
   if(key==='asset_id'){
     QUOTE_SEQ++;
-    TXN_STATE.sellWarning=null; TXN_SELL_CONFIRMED=false;
+    TXN_STATE.sellWarning=null; TXN_SELL_CONFIRMED=false; TXN_STATE.decision_id='';
     if(TXN_STATE.priceAuto){ TXN_STATE.price=''; TXN_STATE.priceAuto=false; TXN_STATE.priceHint=''; }
   }
-  if(key==='date') TXN_STATE.fx = null;
   recomputeTxnGrossAmount();
   computeSellWarning();
   renderTxnModalBody();
   refreshFx();
   maybePrefillQuote();
+}
+
+// ---- date field: never rebuilds the form, only accepts a complete, sensible date ----
+function isValidTxnDate(v){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(v||''))) return false;
+  const y = Number(v.slice(0,4)), mo = Number(v.slice(5,7)), d = Number(v.slice(8,10));
+  if(y < 2000 || y > new Date().getFullYear() + 1) return false;
+  const dt = new Date(y, mo-1, d);
+  return dt.getFullYear()===y && dt.getMonth()===mo-1 && dt.getDate()===d;
+}
+function friendlyDate(v){
+  const dt = new Date(Number(v.slice(0,4)), Number(v.slice(5,7))-1, Number(v.slice(8,10)));
+  return dt.toLocaleDateString(undefined, {weekday:'short', day:'numeric', month:'short', year:'numeric'});
+}
+function dateHintHtml(){
+  if(!isValidTxnDate(TXN_STATE.date)) return '<span class="bad">Enter a complete date: day, month and 4-digit year.</span>';
+  return friendlyDate(TXN_STATE.date) + ' &middot; <a href="#" onclick="setTxnDateToday(); return false;">use today</a>';
+}
+function onTxnDateChange(v){
+  TXN_STATE.submitError = '';
+  if(isValidTxnDate(v)){
+    TXN_STATE.date = v;
+    TXN_STATE.fx = null;
+    refreshFx();
+  }
+  // A half-typed date (e.g. the year is still being entered) is ignored: nothing is rebuilt,
+  // so the box keeps what you are typing. The hint line shows whether the date is usable yet.
+  updateTxnComputedArea();
+}
+function setTxnDateToday(){
+  const v = localDateStr(new Date());
+  setInputValue('txn-date-input', v);
+  onTxnDateChange(v);
+}
+function openDatePicker(el){
+  try{ if(el && el.showPicker) el.showPicker(); }catch(e){ /* typing the date still works */ }
 }
 
 function txnAssetSelectHtml(){
@@ -1507,6 +1569,7 @@ function txnAssetSelectHtml(){
 }
 function onTxnAssetInput(val){
   TXN_STATE.asset_id = String(val).toUpperCase();
+  TXN_STATE.decision_id = '';
   if(TXN_STATE.priceAuto){ TXN_STATE.price=''; TXN_STATE.priceAuto=false; TXN_STATE.priceHint=''; setInputValue('txn-price-input',''); recomputeTxnGrossAmount(); updateTxnComputedArea(); }
   const box = document.getElementById('txn-asset-suggest');
   if(box){
@@ -1524,6 +1587,7 @@ function onTxnAssetInput(val){
     }
   }
   syncNewTickerFields();
+  syncDecisionArea();
 }
 function selectTxnAsset(assetId){
   TXN_STATE.asset_id = assetId;
@@ -1537,6 +1601,7 @@ function onTxnAssetCommit(){
   QUOTE_SEQ++;
   suggestAccountFromHistory();
   syncNewTickerFields();
+  syncDecisionArea();
   maybePrefillQuote();
 }
 function suggestAccountFromHistory(){
@@ -1550,6 +1615,25 @@ function suggestAccountFromHistory(){
   TXN_STATE.accountHint = 'Suggested from your last trade in ' + TXN_STATE.asset_id + ' - change if needed';
   setInputValue('txn-account-select', best.account_id);
   refreshFx();
+}
+
+// ---- optional decision link (only shown when the ticker has decisions on record) ----
+function decisionsForCurrentAsset(){
+  if(!TXN_STATE.asset_id || TXN_ALL_ASSETS===null) return [];
+  const a = TXN_ALL_ASSETS.find(function(x){ return x.asset_id===TXN_STATE.asset_id; });
+  return (a && a.decisions) ? a.decisions : [];
+}
+function syncDecisionArea(){
+  const box = document.getElementById('txn-decision-area');
+  if(!box) return;
+  const a = TXN_STATE.action;
+  const list = (a==='BUY' || a==='SELL') ? decisionsForCurrentAsset() : [];
+  if(!list.length){ box.innerHTML = ''; TXN_STATE.decision_id = ''; return; }
+  box.innerHTML = fld('DECISION (optional)',
+    '<select class="txn-select" onchange="TXN_STATE.decision_id=this.value">' +
+    '<option value="">None</option>' +
+    list.map(function(d){ return '<option value="' + escAttr(d.decision_id) + '"' + (TXN_STATE.decision_id===d.decision_id?' selected':'') + '>' + escAttr(d.label) + '</option>'; }).join('') +
+    '</select>');
 }
 
 // ---- new-ticker details, suggested from what the sheet already knows ----
@@ -1577,9 +1661,11 @@ function syncNewTickerFields(){
   const isNew = isNewTickerNow();
   box.style.display = isNew ? 'block' : 'none';
   if(!isNew) return;
+  // Asset class is suggested from your other holdings. The EXCHANGE is deliberately NOT guessed:
+  // it decides where the price comes from, so you pick it yourself.
   const ccy = txnCcy();
   if(!TXN_STATE.asset_class){ const v = modeValue('asset_class', ccy); if(v){ TXN_STATE.asset_class = v; setInputValue('txn-newclass', v); } }
-  if(!TXN_STATE.exchange){ const v = modeValue('exchange', ccy); if(v){ TXN_STATE.exchange = v; setInputValue('txn-newexch', v); } }
+  updateTxnComputedArea();
 }
 
 // ---- live rate pre-fill (BUY / SELL) ----
@@ -1621,6 +1707,7 @@ async function maybePrefillQuote(){
 }
 
 // ---- FX preview (depends only on account currency + date, so fetched once, not per keystroke) ----
+// The server returns the rate as local units per 1 USD (e.g. about 83 for INR), so USD = amount / rate.
 async function refreshFx(){
   const ccy = txnCcy(), base = baseCcy(), date = TXN_STATE.date;
   if(!ccy || ccy===base){ TXN_STATE.fx = null; updateTxnComputedArea(); return; }
@@ -1679,7 +1766,7 @@ function txnPreviewHtml(){
   if(!ccy || !(g>0)) return '';
   const parts = [];
   if(TXN_STATE.action==='BUY' || TXN_STATE.action==='SELL') parts.push('Trade value: <b>' + fmtMoney(g, ccy) + '</b>');
-  if(ccy!==baseCcy() && TXN_STATE.fx) parts.push('&asymp; ' + fmtUsd(g / TXN_STATE.fx.rate) + ' <b>' + baseCcy() + '</b>' + (TXN_STATE.fx.isFallback ? ' (nearest available FX rate, not same-day)' : ''));
+  if(ccy!==baseCcy() && TXN_STATE.fx) parts.push('&asymp; ' + fmtUsd(g / TXN_STATE.fx.rate) + ' <b>' + baseCcy() + '</b> at ' + Number(TXN_STATE.fx.rate).toFixed(2) + ' ' + escAttr(ccy) + ' per ' + baseCcy() + (TXN_STATE.fx.isFallback ? ' (nearest available FX rate, not same-day)' : ''));
   return parts.length ? '<div class="txn-preview">' + parts.join(' &middot; ') + '</div>' : '';
 }
 function txnWarningHtml(){
@@ -1695,14 +1782,27 @@ function updateTxnComputedArea(){
   setHtmlIfPresent('txn-price-hint', escAttr(TXN_STATE.priceHint));
   setHtmlIfPresent('txn-amount-hint', txnAmountHintHtml());
   setHtmlIfPresent('txn-account-hint', escAttr(TXN_STATE.accountHint));
+  setHtmlIfPresent('txn-date-hint', dateHintHtml());
+  setHtmlIfPresent('txn-newticker-hint', newTickerHintHtml());
   setHtmlIfPresent('txn-wl-hint', escAttr(TXN_STATE.wlHint));
   const btn = document.getElementById('txn-submit-btn'); if(btn) btn.disabled = !txnCanSubmit();
+}
+function newTickerNeedsExchange(){
+  return isNewTickerNow() && TXN_STATE.asset_class!=='Crypto' && TXN_STATE.asset_class!=='Cash' && !String(TXN_STATE.exchange||'').trim();
+}
+function newTickerHintHtml(){
+  if(!isNewTickerNow()) return '';
+  return newTickerNeedsExchange()
+    ? '<span class="bad">Pick the exchange this ticker trades on - it decides where its price is fetched from.</span>'
+    : '';
 }
 function txnCanSubmit(){
   const a = TXN_STATE.action;
   if(a==='WATCHLIST') return !!(TXN_STATE.ticker && Number(TXN_STATE.entry_high) > 0);
   if(!TXN_STATE.account_id) return false;
+  if(!isValidTxnDate(TXN_STATE.date)) return false;
   if((a==='BUY'||a==='SELL'||a==='DIVIDEND') && !TXN_STATE.asset_id) return false;
+  if(newTickerNeedsExchange()) return false;
   if((a==='BUY'||a==='SELL') && !(Number(TXN_STATE.quantity)>0 && Number(TXN_STATE.price)>0)) return false;
   if(!(Number(TXN_STATE.gross_amount)>0)) return false;
   if(TXN_STATE.sellWarning && !TXN_SELL_CONFIRMED) return false;
@@ -1762,6 +1862,7 @@ async function submitTxn(){
       txn_action: TXN_STATE.action, account_id: TXN_STATE.account_id, asset_id: TXN_STATE.asset_id||'',
       date: TXN_STATE.date, quantity: TXN_STATE.quantity||'', price: TXN_STATE.price||'',
       gross_amount: TXN_STATE.gross_amount, notes: TXN_STATE.notes||'',
+      decision_id: TXN_STATE.decision_id||'',
       confirmSellWarning: TXN_SELL_CONFIRMED ? 'true' : 'false',
     };
     if(isNewTickerNow()){
@@ -1777,9 +1878,10 @@ async function submitTxn(){
     }
     if(!r.success){ failSave(r.error||'Unknown error'); return; }
     closeTxnModal();
+    TXN_ALL_ASSETS = null; // so a ticker added just now (or its decisions) shows up next time the form opens
     const feeTxt = (r.fees && Number(r.fees)>0) ? (' - fees ' + fmtMoney(Number(r.fees), r.trade_currency)) : '';
     const what = r.txn_action + ' ' + (r.asset_id ? (r.asset_id + ' ') : '') + fmtMoney(Number(r.gross_amount), r.trade_currency);
-    showToast('\u2713 ' + what + ' recorded (' + r.transaction_id + ')' + feeTxt, 'success');
+    showToast('\u2713 ' + what + ' recorded (' + r.transaction_id + ')' + feeTxt + (r.notice ? (' - ' + r.notice) : ''), 'success');
     switchTab('portfolio');
     await fullLoad(false);
   } catch(err){
@@ -1823,15 +1925,16 @@ function renderTxnModalBody(){
   if(a!=='DEPOSIT' && a!=='WITHDRAWAL') html += fld('TICKER', txnAssetSelectHtml());
   if(a==='BUY'){
     html += '<div id="txn-newticker" class="txn-new-ticker-fields" style="display:' + (isNewTickerNow() ? 'block' : 'none') + ';">' +
-      '<p class="hint" style="margin:0 0 8px;">New ticker - suggested from your other holdings in this currency. Correct anything that is wrong.</p>' +
+      '<p class="hint" style="margin:0 0 8px;">New ticker - correct anything that is wrong. Asset class is suggested from your other holdings; pick the exchange yourself.</p>' +
       fld('NAME', '<input class="txn-input" id="txn-newname" value="' + escAttr(TXN_STATE.asset_name) + '" oninput="TXN_STATE.asset_name=this.value">') +
-      fld('ASSET CLASS', '<input class="txn-input" id="txn-newclass" list="dl-asset-class" value="' + escAttr(TXN_STATE.asset_class) + '" oninput="TXN_STATE.asset_class=this.value">') +
-      fld('EXCHANGE', '<input class="txn-input" id="txn-newexch" list="dl-exchange" value="' + escAttr(TXN_STATE.exchange) + '" oninput="TXN_STATE.exchange=this.value">') +
+      fld('ASSET CLASS', '<input class="txn-input" id="txn-newclass" list="dl-asset-class" value="' + escAttr(TXN_STATE.asset_class) + '" oninput="TXN_STATE.asset_class=this.value; updateTxnComputedArea();">') +
+      fld('EXCHANGE (required unless crypto)', '<input class="txn-input" id="txn-newexch" list="dl-exchange" placeholder="e.g. NASDAQ, NYSE, NSE, ADX, DFM" value="' + escAttr(TXN_STATE.exchange) + '" oninput="TXN_STATE.exchange=this.value.toUpperCase(); updateTxnComputedArea();">', 'txn-newticker-hint') +
       '<datalist id="dl-asset-class">' + distinctValues('asset_class').map(function(v){ return '<option value="' + escAttr(v) + '">'; }).join('') + '</datalist>' +
       '<datalist id="dl-exchange">' + distinctValues('exchange').map(function(v){ return '<option value="' + escAttr(v) + '">'; }).join('') + '</datalist>' +
       '</div>';
   }
-  html += fld('DATE', '<input type="date" class="txn-input" value="' + escAttr(TXN_STATE.date) + '" onchange="setTxnField(\'date\', this.value)">');
+  if(a==='BUY' || a==='SELL') html += '<div id="txn-decision-area"></div>';
+  html += fld('DATE', '<input type="date" class="txn-input" id="txn-date-input" min="2015-01-01" max="' + escAttr(localDateStr(new Date())) + '" value="' + escAttr(TXN_STATE.date) + '" onchange="onTxnDateChange(this.value)" onclick="openDatePicker(this)">', 'txn-date-hint');
   if(a==='BUY' || a==='SELL'){
     html += fld('QUANTITY', '<input type="number" step="any" inputmode="decimal" class="txn-input" id="txn-qty-input" value="' + escAttr(TXN_STATE.quantity) + '" oninput="TXN_STATE.quantity=this.value; onTxnNumberChange();">', 'txn-qty-hint');
     html += fld('PRICE' + (ccy ? (' (' + escAttr(ccy) + ' per unit)') : ' (per unit)'), '<input type="number" step="any" inputmode="decimal" class="txn-input" id="txn-price-input" value="' + escAttr(TXN_STATE.price) + '" oninput="TXN_STATE.price=this.value; TXN_STATE.priceAuto=false; onTxnNumberChange();">', 'txn-price-hint');
@@ -1842,6 +1945,7 @@ function renderTxnModalBody(){
   html += fld('NOTES (optional)', '<input class="txn-input" value="' + escAttr(TXN_STATE.notes) + '" oninput="TXN_STATE.notes=this.value">');
   html += '<button class="txn-submit-btn" id="txn-submit-btn" onclick="submitTxn()">Save transaction</button>';
   el.innerHTML = html;
+  syncDecisionArea();
   updateTxnComputedArea();
 }
 </script>
