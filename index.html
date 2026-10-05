@@ -506,7 +506,9 @@ function renderGoalAndPace(){
         '<div class="gd-row"><span class="k">At cost (no live price)</span><span class="v ' + (estimatedPositions.length?'loss':'') + '">' + estimatedPositions.length + '</span></div>' +
         '<div class="gd-row"><span class="k">Total Gain</span><span class="change ' + (totalGainBase>=0?'up':'down') + '">' + (totalGainBase>=0?'+':'-') + maskable(fmtUsd(Math.abs(totalGainBase))) + (totalGainPct!==null ? ' (' + (totalGainPct>=0?'+':'') + totalGainPct.toFixed(1) + '%)' : '') + '</span></div>' +
         (xirrPct!==null ? '<div class="gd-row"><span class="k">XIRR (since inception)</span><span class="change ' + (xirrPct>=0?'up':'down') + '">' + (xirrPct>=0?'+':'') + xirrPct.toFixed(1) + '%/yr</span></div>' : '') +
-        (twrPct!==null ? '<div class="gd-row"><span class="k">TWR (since inception)</span><span class="change ' + (twrPct>=0?'up':'down') + '">' + (twrPct>=0?'+':'') + twrPct.toFixed(1) + '%/yr</span></div>' : '') +
+        (twrPct!==null ? (Math.abs(twrPct) > 500
+          ? '<div class="gd-row"><span class="k">TWR (cumulative)</span><span class="v loss">unreliable - price history incomplete</span></div>'
+          : '<div class="gd-row"><span class="k">TWR (cumulative since inception)</span><span class="change ' + (twrPct>=0?'up':'down') + '">' + (twrPct>=0?'+':'') + twrPct.toFixed(1) + '%</span></div>') : '') +
         (annualizedPct!==null ? '<div class="gd-row"><span class="k">Annualized (approx.)</span><span class="change ' + (annualizedPct>=0?'up':'down') + '">' + (annualizedPct>=0?'+':'') + annualizedPct.toFixed(1) + '%/yr</span></div>' : '') +
         '<div class="gd-row"><span class="k">Today\'s Gain</span><span class="change ' + (dayGainBase>=0?'up':'down') + '">' + (dayGainBase>=0?'+':'-') + maskable(fmtUsd(Math.abs(dayGainBase))) + '</span></div></div>' +
       '</div>' +
@@ -1367,6 +1369,7 @@ function renderWatchlistView(){
       (w.priority?(' <span class="wl-badge active">' + w.priority + '</span>'):'') + '</div>' +
       '<div class="wl-right"><div class="wl-current">' + maskable(curStr) + '</div>' +
       '<div class="wl-distance ' + distClass + '">' + distStr + '</div>' +
+      '<button class="wl-dismiss" onclick="editWatchlistItem(\'' + w.watchlist_id + '\')">Edit</button> ' +
       '<button class="wl-dismiss" onclick="removeWatchlistItem(\'' + w.watchlist_id + '\')">Remove</button></div></div>';
   }
   el.innerHTML = '<p class="section-title" style="margin-top:18px;">WATCHLIST</p>' + sorted.map(row).join('');
@@ -1378,6 +1381,26 @@ async function removeWatchlistItem(id){
   } catch(err){
     alert('Could not remove: ' + err.message);
   }
+}
+// Edit = open the watchlist form pre-filled with this item. On save, the old entry is replaced by the
+// new one (remove, then add). If adding the new one fails, the original is put back, so nothing is lost.
+function editWatchlistItem(id){
+  const w = WATCHLIST.find(function(x){ return String(x.watchlist_id)===String(id); });
+  if(!w) return;
+  openTxnModal();
+  TXN_STATE.action = 'WATCHLIST';
+  TXN_STATE.editId = id;
+  TXN_STATE.editOriginal = {
+    ticker: w.ticker||'', yahoo_id: w.yahoo_id||'', company: w.company||'', sector: w.sector||'',
+    entry_low: (w.entry_low===null||w.entry_low===undefined)?'':w.entry_low,
+    entry_high: (w.entry_high===null||w.entry_high===undefined)?'':w.entry_high,
+    priority: w.priority||'', notes: w.notes||''
+  };
+  const o = TXN_STATE.editOriginal;
+  TXN_STATE.ticker = o.ticker; TXN_STATE.yahoo_id = o.yahoo_id; TXN_STATE.company = o.company; TXN_STATE.sector = o.sector;
+  TXN_STATE.entry_low = String(o.entry_low); TXN_STATE.entry_high = String(o.entry_high);
+  TXN_STATE.priority = o.priority; TXN_STATE.notes = o.notes;
+  renderTxnModalBody();
 }
 
 // ---- Alert banner ----
@@ -1468,7 +1491,7 @@ function showToast(msg, type){
 function openTxnModal(){
   TXN_STATE = { action: ACTIVE_TAB==='watchlist' ? 'WATCHLIST' : 'BUY', account_id:'', asset_id:'', date: localDateStr(new Date()),
     quantity:'', price:'', gross_amount:'', notes:'', priceAuto:false, priceHint:'', accountHint:'',
-    asset_name:'', asset_class:'', exchange:'', decision_id:'',
+    asset_name:'', asset_class:'', exchange:'', decision_id:'', editId:'', editOriginal:null,
     ticker:'', yahoo_id:'', company:'', sector:'', entry_low:'', entry_high:'', priority:'', wlHint:'',
     sellWarning:null, fx:null, submitError:'' };
   TXN_SELL_CONFIRMED = false;
@@ -1848,10 +1871,31 @@ async function submitTxn(){
   const isWl = TXN_STATE.action==='WATCHLIST';
   try{
     if(isWl){
-      const r = await loadData('add_watchlist_item', {
+      const newParams = {
         ticker: TXN_STATE.ticker, yahoo_id: TXN_STATE.yahoo_id||'', company: TXN_STATE.company||'', sector: TXN_STATE.sector||'',
         entry_low: TXN_STATE.entry_low||'', entry_high: TXN_STATE.entry_high, priority: TXN_STATE.priority||'', notes: TXN_STATE.notes||'',
-      });
+      };
+      if(TXN_STATE.editId){
+        // EDIT: replace the old entry. If the new one cannot be added, restore the original.
+        const original = TXN_STATE.editOriginal || {};
+        await loadData('remove_watchlist_item', { watchlist_id: TXN_STATE.editId });
+        let r = null, addErr = null;
+        try{ r = await loadData('add_watchlist_item', newParams); }catch(e){ addErr = e; }
+        if(!r || !r.success){
+          try{ await loadData('add_watchlist_item', {
+            ticker: original.ticker||'', yahoo_id: original.yahoo_id||'', company: original.company||'', sector: original.sector||'',
+            entry_low: original.entry_low||'', entry_high: original.entry_high||'', priority: original.priority||'', notes: original.notes||'',
+          }); }catch(e2){ /* nothing more we can do here */ }
+          TXN_STATE.editId = ''; // original has been put back as a fresh entry
+          failSave((r && r.error) || (addErr && addErr.message) || 'Could not save the change - your original entry was kept.');
+          return;
+        }
+        closeTxnModal();
+        showToast('\u2713 ' + (r.ticker||TXN_STATE.ticker) + ' updated', 'success');
+        switchTab('watchlist');
+        return;
+      }
+      const r = await loadData('add_watchlist_item', newParams);
       if(!r.success){ failSave(r.error||'Unknown error'); return; }
       closeTxnModal();
       showToast('\u2713 ' + (r.ticker||TXN_STATE.ticker) + ' added to your watchlist' + (r.company ? (' - ' + r.company) : ''), 'success');
@@ -1899,7 +1943,7 @@ function renderTxnModalBody(){
   if(!el) return;
   const a = TXN_STATE.action;
   const titleEl = document.getElementById('txn-modal-title');
-  if(titleEl && titleEl.firstChild) titleEl.firstChild.textContent = a==='WATCHLIST' ? 'Add to Watchlist' : 'Add Transaction';
+  if(titleEl && titleEl.firstChild) titleEl.firstChild.textContent = a==='WATCHLIST' ? (TXN_STATE.editId ? 'Edit Watchlist Item' : 'Add to Watchlist') : 'Add Transaction';
   let html = TXN_STATE.submitError ? ('<div class="txn-error">' + escAttr(TXN_STATE.submitError) + '</div>') : '';
   html += fld('ACTION', '<select class="txn-select" onchange="setTxnField(\'action\', this.value)">' +
     TXN_ACTIONS.map(function(x){ return '<option value="' + x + '"' + (a===x?' selected':'') + '>' + (x==='WATCHLIST'?'Watchlist':x) + '</option>'; }).join('') + '</select>');
@@ -1914,7 +1958,7 @@ function renderTxnModalBody(){
     html += fld('ENTRY HIGH', '<input type="number" step="any" inputmode="decimal" class="txn-input" value="' + escAttr(TXN_STATE.entry_high) + '" oninput="TXN_STATE.entry_high=this.value; updateTxnComputedArea();">');
     html += fld('PRIORITY (optional)', '<input class="txn-input" placeholder="e.g. PATIENT, URGENT" value="' + escAttr(TXN_STATE.priority) + '" oninput="TXN_STATE.priority=this.value">');
     html += fld('NOTES (optional)', '<input class="txn-input" value="' + escAttr(TXN_STATE.notes) + '" oninput="TXN_STATE.notes=this.value">');
-    html += '<button class="txn-submit-btn" id="txn-submit-btn" onclick="submitTxn()">Save to watchlist</button>';
+    html += '<button class="txn-submit-btn" id="txn-submit-btn" onclick="submitTxn()">' + (TXN_STATE.editId ? 'Save changes' : 'Save to watchlist') + '</button>';
     el.innerHTML = html;
     updateTxnComputedArea();
     return;
