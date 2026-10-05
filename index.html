@@ -1209,24 +1209,30 @@ function parseCardKey(cardKey){ const parts = cardKey.split('__'); return { acco
 async function submitManualPrice(cardKey, inputId){
   const input = document.getElementById(inputId);
   const price = Number(input.value);
-  if(!input.value || isNaN(price)){ input.focus(); return; }
-  const { asset_id } = parseCardKey(cardKey);
+  if(!input.value || isNaN(price) || price <= 0){ showToast('\u2717 Enter a price above zero first.', 'error'); input.focus(); return; }
+  const { account_id, asset_id } = parseCardKey(cardKey);
+  const h = HOLDINGS.find(function(x){ return x.account_id===account_id && x.asset_id===asset_id; });
+  const ccy = h ? h.currency : '';
   input.disabled = true;
   try{
     await loadData('set_manual_price', { asset_id: asset_id, price: price });
+    showToast('\u2713 Price saved: ' + asset_id + ' = ' + fmtMoney(price, ccy) + ' - auto-fetch is paused for this ticker (tap Resume auto-fetch to switch it back on)', 'success');
     await fullLoad(false);
   } catch(err){
-    alert('Could not save manual price: ' + err.message);
+    showToast('\u2717 Price not saved - ' + err.message, 'error');
     input.disabled = false;
   }
 }
 async function submitResumeAutoFetch(cardKey){
-  const { asset_id } = parseCardKey(cardKey);
+  const { account_id, asset_id } = parseCardKey(cardKey);
   try{
     await loadData('resume_auto_fetch', { asset_id: asset_id });
     await fullLoad(false);
+    const h = HOLDINGS.find(function(x){ return x.account_id===account_id && x.asset_id===asset_id; });
+    const ltp = (h && h.latest_price_trade_ccy!=null) ? (' - latest price ' + fmtMoney(h.latest_price_trade_ccy, h.currency)) : '';
+    showToast('\u2713 Auto-fetch resumed for ' + asset_id + ltp, 'success');
   } catch(err){
-    alert('Could not resume auto-fetch: ' + err.message);
+    showToast('\u2717 Could not resume auto-fetch - ' + err.message, 'error');
   }
 }
 let loadInProgress = false;
@@ -1382,8 +1388,7 @@ async function removeWatchlistItem(id){
     alert('Could not remove: ' + err.message);
   }
 }
-// Edit = open the watchlist form pre-filled with this item. On save, the old entry is replaced by the
-// new one (remove, then add). If adding the new one fails, the original is put back, so nothing is lost.
+// Edit = open the watchlist form pre-filled with this item; saving updates that same row in place.
 function editWatchlistItem(id){
   const w = WATCHLIST.find(function(x){ return String(x.watchlist_id)===String(id); });
   if(!w) return;
@@ -1876,22 +1881,11 @@ async function submitTxn(){
         entry_low: TXN_STATE.entry_low||'', entry_high: TXN_STATE.entry_high, priority: TXN_STATE.priority||'', notes: TXN_STATE.notes||'',
       };
       if(TXN_STATE.editId){
-        // EDIT: replace the old entry. If the new one cannot be added, restore the original.
-        const original = TXN_STATE.editOriginal || {};
-        await loadData('remove_watchlist_item', { watchlist_id: TXN_STATE.editId });
-        let r = null, addErr = null;
-        try{ r = await loadData('add_watchlist_item', newParams); }catch(e){ addErr = e; }
-        if(!r || !r.success){
-          try{ await loadData('add_watchlist_item', {
-            ticker: original.ticker||'', yahoo_id: original.yahoo_id||'', company: original.company||'', sector: original.sector||'',
-            entry_low: original.entry_low||'', entry_high: original.entry_high||'', priority: original.priority||'', notes: original.notes||'',
-          }); }catch(e2){ /* nothing more we can do here */ }
-          TXN_STATE.editId = ''; // original has been put back as a fresh entry
-          failSave((r && r.error) || (addErr && addErr.message) || 'Could not save the change - your original entry was kept.');
-          return;
-        }
+        // EDIT: update the existing entry in place (same row, same id).
+        const upd = await loadData('update_watchlist_item', Object.assign({ watchlist_id: TXN_STATE.editId }, newParams));
+        if(!upd.success){ failSave(upd.error||'Could not save the change.'); return; }
         closeTxnModal();
-        showToast('\u2713 ' + (r.ticker||TXN_STATE.ticker) + ' updated', 'success');
+        showToast('\u2713 ' + (upd.ticker||TXN_STATE.ticker) + ' updated - entry range ' + (newParams.entry_low ? (newParams.entry_low + ' to ') : 'up to ') + newParams.entry_high, 'success');
         switchTab('watchlist');
         return;
       }
@@ -1949,7 +1943,7 @@ function renderTxnModalBody(){
     TXN_ACTIONS.map(function(x){ return '<option value="' + x + '"' + (a===x?' selected':'') + '>' + (x==='WATCHLIST'?'Watchlist':x) + '</option>'; }).join('') + '</select>');
 
   if(a==='WATCHLIST'){
-    html += fld('TICKER', '<input type="text" class="txn-input" style="text-transform:uppercase;" value="' + escAttr(TXN_STATE.ticker) + '" oninput="TXN_STATE.ticker=this.value.toUpperCase(); updateTxnComputedArea();" onchange="onWlTickerChange()" autocomplete="off">');
+    html += fld('TICKER' + (TXN_STATE.editId ? ' (fixed - remove and re-add to change)' : ''), '<input type="text" class="txn-input" style="text-transform:uppercase;" value="' + escAttr(TXN_STATE.ticker) + '"' + (TXN_STATE.editId ? ' readonly' : '') + ' oninput="TXN_STATE.ticker=this.value.toUpperCase(); updateTxnComputedArea();" onchange="onWlTickerChange()" autocomplete="off">');
     html += fld('YAHOO SYMBOL (optional)', '<input class="txn-input" style="text-transform:uppercase;" placeholder="only if different - e.g. RELIANCE.NS" value="' + escAttr(TXN_STATE.yahoo_id) + '" oninput="TXN_STATE.yahoo_id=this.value.toUpperCase()" onchange="onWlTickerChange()" autocomplete="off">');
     html += fld('COMPANY (filled in automatically if left blank)', '<input class="txn-input" id="txn-wl-company" value="' + escAttr(TXN_STATE.company) + '" oninput="TXN_STATE.company=this.value">');
     html += fld('SECTOR (filled in automatically if left blank)', '<input class="txn-input" id="txn-wl-sector" value="' + escAttr(TXN_STATE.sector) + '" oninput="TXN_STATE.sector=this.value">');
