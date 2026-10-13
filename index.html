@@ -34,7 +34,7 @@ input[type=date]{color-scheme:dark}
 input.f,select.f,textarea.f{font-size:10px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px}
 /* top bar */
 .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px}
-.ttl{font-size:10px;letter-spacing:.12em;color:var(--text-faint);display:flex;align-items:center;gap:6px;min-width:0}
+.ttl{font-size:10px;letter-spacing:.12em;color:var(--text-faint);display:flex;align-items:center;gap:6px;min-width:0;flex:1;overflow:hidden}.ttl>span:first-child{flex:none}#status-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--gray);flex:none}.dot.live{background:var(--green)}.dot.stale{background:var(--orange)}
 .ico{display:flex;gap:7px;flex:none}
 .ib{position:relative;background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:8px;width:32px;height:30px;font-size:13px;cursor:pointer}
@@ -92,7 +92,7 @@ td:first-child{white-space:normal;padding-left:0}tr.sel td{background:rgba(201,1
 .legrow span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pie path{cursor:pointer;transition:opacity .15s}
 /* bars */
-.bar-row{display:grid;grid-template-columns:90px 1fr 62px;gap:8px;align-items:center;font-size:10px;padding:4px 0}
+.bar-row{display:grid;grid-template-columns:84px 1fr 96px;gap:8px;align-items:center;font-size:10px;padding:4px 0}
 .bar-row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-dim)}
 .bar-track{position:relative;height:8px;background:var(--surface-2);border-radius:4px}
 .bar-fill{position:absolute;top:0;height:8px;border-radius:4px}.bar-row .vv{text-align:right}
@@ -129,9 +129,9 @@ td:first-child{white-space:normal;padding-left:0}tr.sel td{background:rgba(201,1
 .wl-row{display:flex;align-items:center;gap:10px;padding:12px;background:var(--surface);border:1px solid var(--border-soft);border-radius:9px;margin-bottom:8px}
 .wl-row.inzone{border-color:rgba(53,196,140,.5)}
 .wl-left{flex:1;min-width:0}.wl-meta{font-size:9.5px;color:var(--text-faint);margin-top:3px;line-height:1.5}
-.wl-right{text-align:right;flex:none}.wl-right .btn{margin:4px 0 0 3px;padding:3px 7px;font-size:9px}
+.wl-row{flex-wrap:wrap}.wl-right{text-align:right;flex:none;max-width:100%}.wl-right .btns{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;margin-top:5px}.wl-right .btn{padding:4px 9px;font-size:10px}
 /* sheets */
-.sheet{position:fixed;left:50%;bottom:0;width:min(560px,100%);background:var(--surface-2);border:1px solid var(--gold);border-bottom:0;border-radius:18px 18px 0 0;padding:14px 16px 20px;transform:translate(-50%,110%);transition:transform .25s;z-index:850;max-height:76vh;overflow:auto;visibility:hidden}
+.sheet{position:fixed;left:50%;bottom:0;width:min(560px,100%);z-index:1050;background:var(--surface-2);border:1px solid var(--gold);border-bottom:0;border-radius:18px 18px 0 0;padding:14px 16px 20px;transform:translate(-50%,110%);transition:transform .25s;max-height:76vh;overflow:auto;visibility:hidden}
 .sheet.open{transform:translate(-50%,0);visibility:visible}
 .sheet h4{margin:0 0 6px;font-family:var(--serif);font-size:16px}
 .x{float:right;background:none;border:0;color:var(--text-dim);cursor:pointer;font-size:16px}
@@ -147,10 +147,11 @@ td:first-child{white-space:normal;padding-left:0}tr.sel td{background:rgba(201,1
 .chart-tooltip{position:absolute;z-index:500;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:6px;padding:7px 10px;font-size:10px;pointer-events:none;opacity:0;transition:opacity .08s;white-space:nowrap}
 .ct-date{color:var(--text-faint);font-size:9px;margin-bottom:4px}.ct-row{display:flex;align-items:center;gap:5px;color:var(--text-dim)}.ct-sw{width:8px;height:8px;border-radius:2px;display:inline-block}
 /* modal */
-.txn-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:900;display:none;align-items:flex-end;justify-content:center}
+.txn-modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.65);z-index:1100;display:none;align-items:flex-start;justify-content:center;padding:10px;overflow:hidden}
 .txn-modal-overlay.show{display:flex}
-.txn-modal{background:var(--surface);border:1px solid var(--border-soft);border-radius:16px 16px 0 0;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;padding:18px 18px 26px}
-@media(min-width:520px){.txn-modal-overlay{align-items:center}.txn-modal{border-radius:14px;max-height:84vh}}
+.txn-modal{background:var(--surface);border:1px solid var(--border-soft);border-radius:14px;width:100%;max-width:480px;max-height:calc(100vh - 20px);max-height:calc(100dvh - 20px);overflow-y:auto;-webkit-overflow-scrolling:touch;padding:18px 18px 26px}
+body.modal-open{overflow:hidden}
+.txn-input,.txn-select,input.f,select.f,textarea.f{font-size:16px}input.f,select.f{font-size:12px}
 .txn-modal-title{font-family:var(--serif);font-size:17px;margin:0 0 14px;display:flex;justify-content:space-between;align-items:center}
 .txn-modal-close{background:none;border:0;color:var(--text-faint);font-size:22px;cursor:pointer}
 .txn-field{margin-bottom:12px}.txn-label{font-size:9.5px;color:var(--text-faint);letter-spacing:.05em;margin-bottom:4px;display:block}
@@ -176,7 +177,7 @@ details.txn-extra summary{font-size:10px;color:var(--gold-bright);cursor:pointer
 .lock-error{font-size:10.5px;color:var(--red);margin-top:10px;min-height:14px}
 .toast{position:fixed;left:16px;right:16px;bottom:24px;max-width:420px;margin:0 auto;z-index:1000;background:var(--surface);border:1px solid var(--border-soft);border-radius:10px;padding:12px 16px;font-size:11px;box-shadow:0 8px 24px rgba(0,0,0,.5);transform:translateY(140%);opacity:0;transition:transform .25s,opacity .2s;pointer-events:none;line-height:1.5}
 .toast.show{transform:translateY(0);opacity:1}.toast.success{border-color:var(--green)}.toast.error{border-color:var(--red)}
-.alert-banner{position:fixed;top:16px;left:16px;right:16px;max-width:400px;max-height:70vh;overflow-y:auto;margin:0 auto;z-index:950;background:var(--surface);border:1px solid var(--gold);border-radius:12px;padding:14px 16px;box-shadow:0 8px 28px rgba(0,0,0,.5);display:flex;gap:12px;align-items:flex-start;transform:translateY(-140%);opacity:0;transition:transform .3s,opacity .25s;pointer-events:none}
+.alert-banner{position:fixed;top:56px;left:16px;right:16px;max-width:400px;max-height:70vh;overflow-y:auto;margin:0 auto;z-index:950;background:var(--surface);border:1px solid var(--gold);border-radius:12px;padding:14px 16px;box-shadow:0 8px 28px rgba(0,0,0,.5);display:flex;gap:12px;align-items:flex-start;transform:translateY(-140%);opacity:0;transition:transform .3s,opacity .25s;pointer-events:none}
 .alert-banner.show{transform:translateY(0);opacity:1;pointer-events:auto}
 .alert-icon{width:32px;height:32px;border-radius:50%;background:rgba(201,162,39,.15);flex:none;display:flex;align-items:center;justify-content:center;font-size:15px}
 .alert-body{flex:1;min-width:0;cursor:pointer}.alert-title{font-size:11.5px;font-weight:600;color:var(--gold-bright);margin-bottom:4px}.alert-text{font-size:10.5px;color:var(--text-dim);line-height:1.5}
@@ -334,12 +335,14 @@ function applyLive(){
   HOLDINGS.forEach(function(h){
     const v0 = snapVal(h);
     h._v = v0; h._unreal = num(h.unrealized_gain_base); h._day = num(h.day_gain_base); h._dayPct = h.day_gain_pct; h._live = false;
+    h._ltp = h.latest_price_trade_ccy;
     if(isCash(h) || num(h.quantity) <= 1e-9) return;
     const L = LIVE && LIVE.prices && LIVE.prices[h.asset_id];
     if(L && num(h.latest_price) > 0 && L.p > 0 && (!L.ccy || !h.price_currency || String(L.ccy).toUpperCase()===String(h.price_currency).toUpperCase())){
       let ratio = L.p / num(h.latest_price), fxr = 1;
       if(h.currency && h.currency!==base && LIVE.fx && LIVE.fx[h.currency] && fxs[h.currency]) fxr = LIVE.fx[h.currency] / fxs[h.currency];
       if(ratio > 0.5 && ratio < 2 && fxr > 0.8 && fxr < 1.25){
+        if(h.currency===String(L.ccy||h.price_currency).toUpperCase()) h._ltp = L.p;
         h._v = v0 * ratio * fxr; h._unreal = num(h.unrealized_gain_base) + (h._v - v0); h._live = true; liveCount++;
         if(L.prev > 0){ h._day = h._v * (1 - L.prev / L.p); h._dayPct = (L.p / L.prev - 1) * 100; }
       }
@@ -387,8 +390,11 @@ async function loadParts(){
   const jobs = [['lots',function(r){ LOTS = r.holdingsLots || []; }],['closed',function(r){ CLOSED = r.realizedLots || []; }],
     ['returns',function(r){ RETURNS = r; }],['transactions',function(r){ TXNS = r.transactions || []; }],
     ['watchlist',function(r){ WATCHLIST = r.watchlist || []; checkWatchlistAlerts(WATCHLIST); }]];
+  // snapshot built before the Snapshot.gs patch has no watchlist part: fall back to the live watchlist call
   await Promise.all(jobs.map(function(j){
-    return loadData('snapshot_part', {part:j[0]}).then(function(r){ j[1](r); renderAfterPart(j[0]); }).catch(function(e){ console.warn('part '+j[0]+' failed', e); });
+    return loadData('snapshot_part', {part:j[0]}).then(function(r){
+      if(j[0]==='watchlist' && !(r && r.watchlist)) return loadData('get_watchlist').then(function(w){ j[1](w); renderAfterPart('watchlist'); });
+      j[1](r); renderAfterPart(j[0]); }).catch(function(e){ console.warn('part '+j[0]+' failed', e); });
   }));
   PARTS_LOADING = false;
 }
@@ -406,10 +412,19 @@ async function loadLive(){
   }catch(e){ console.warn('live failed', e); }
   setStatusLine();
 }
+// older backend (before the WebApp patch) does not send accounts / targets / config with 'home': fetch them separately
+async function ensureRefs(){
+  const jobs = [];
+  if(!ACCOUNTS.length) jobs.push(loadData('accounts').then(function(r){ ACCOUNTS = r.accounts || []; }).catch(function(){}));
+  if(!TARGETS.length) jobs.push(loadData('targets').then(function(r){ TARGETS = r.targets || []; }).catch(function(){}));
+  if(!Object.keys(CONFIG).length) jobs.push(loadData('config').then(function(r){ CONFIG = r.config || {}; }).catch(function(){}));
+  if(jobs.length) await Promise.all(jobs);
+}
 async function fullLoad(){
   if(LOAD_BUSY) return; LOAD_BUSY = true;
   try{
     const ok = await loadHome();
+    if(ok) await ensureRefs();
     if(!ok){ renderNeedsBuild(); }
     else { renderAll(); loadParts().then(function(){ PARTS_LOADING=false; }); loadLive(); }
   }catch(err){
@@ -455,7 +470,7 @@ function showLockedUI(locked){
 }
 function afterUnlock(){
   showLockedUI(false);
-  const c = cacheGet(); if(c && applyHome(c)){ renderAll(); }
+  const c = cacheGet(); if(c && applyHome(c)){ ensureRefs().then(function(){ renderAll(); }); }
   fullLoad();
 }
 async function initGate(){
@@ -534,7 +549,7 @@ function renderInboxSheet(){
   '<div class="hint" style="margin-top:8px">The bell lights up for dividends to confirm, a goal-pace gap, a position above its cap, big moves and watchlist names in their entry zone. "Got it" clears an item for this month.</div>';
 }
 async function dismissInbox(key){
-  try{ const r = await loadData('inbox_action', {key:key}); if(r.success===false) throw new Error(r.error);
+  try{ const r = await loadData('inbox_action', {item_key:key}); if(r.success===false) throw new Error(r.error);
     INBOX.items = INBOX.items.filter(function(i){ return i.key!==key; }); renderBadges(); renderInboxSheet(); }
   catch(e){ showToast('Could not clear - '+e.message,'error'); }
 }
@@ -553,14 +568,14 @@ function renderDqSheet(){
 }
 async function ackWarning(key, i){
   const r = $('ackr-'+i); const reason = r ? r.value.trim() : '';
-  try{ const res = await loadData('ack_warning', {key:key, reason: reason || 'Acknowledged from the dashboard'}); if(res.success===false) throw new Error(res.error);
+  try{ const res = await loadData('ack_warning', {item_key:key, reason: reason || 'Acknowledged from the dashboard'}); if(res.success===false) throw new Error(res.error);
     const a = ALERTS.active.find(function(x){ return x.key===key; }); ALERTS.active = ALERTS.active.filter(function(x){ return x.key!==key; });
     if(a){ a.reason = reason || 'Acknowledged'; ALERTS.acknowledged = (ALERTS.acknowledged||[]).concat([a]); }
     renderBadges(); renderDqSheet(); }
   catch(e){ showToast('Could not acknowledge - '+e.message,'error'); }
 }
 async function unackWarning(key){
-  try{ const res = await loadData('unack_warning', {key:key}); if(res.success===false) throw new Error(res.error);
+  try{ const res = await loadData('unack_warning', {item_key:key}); if(res.success===false) throw new Error(res.error);
     const a = (ALERTS.acknowledged||[]).find(function(x){ return x.key===key; }); ALERTS.acknowledged = (ALERTS.acknowledged||[]).filter(function(x){ return x.key!==key; });
     if(a) ALERTS.active = (ALERTS.active||[]).concat([a]); renderBadges(); renderDqSheet(); }
   catch(e){ showToast('Could not restore - '+e.message,'error'); }
@@ -673,26 +688,41 @@ function chipsHtml(cur, fn){
     return '<button class="chip '+(d===cur?'on':'')+'" onclick="'+fn+'(\''+d+'\')">'+DIM_NAMES[d]+(on?' ●':'')+'</button>';
   }).join('')+'</div>';
 }
+function inceptionDate(){
+  let d = CONFIG && CONFIG.portfolio_inception ? new Date(String(CONFIG.portfolio_inception).slice(0,10)+'T00:00:00') : null;
+  if(!d || isNaN(d)){ d=null; (TXNS||[]).forEach(function(t){ const x=new Date(String(t.date).slice(0,10)+'T00:00:00'); if(!isNaN(x) && (!d || x<d)) d=x; }); }
+  return d;
+}
+function periodYears(p){
+  const d = inceptionDate(), itd = d ? (Date.now()-d)/(365.25*86400000) : null, n = p==='1Y'?1:p==='3Y'?3:p==='5Y'?5:null;
+  if(p==='ITD') return itd||0; return itd!==null ? Math.min(n, itd) : n;
+}
 function setOverDim(d){ OVER_DIM=d; renderOverview(); }
 function setMetric(m){ METRIC=m; renderOverview(); }
 function setPeriod(p){ PERIOD=p; renderOverview(); }
 function renderOverview(){
   if(!HOME) return;
   const rows = segRows(OVER_DIM), sel = filterChain.find(function(f){ return f.dim===OVER_DIM; });
-  const tbl = rows.length ? '<table><thead><tr><th>&nbsp;</th><th>Invested</th><th>Value</th><th>Return</th><th>/yr</th></tr></thead><tbody>' +
+  const tbl = rows.length ? '<table><thead><tr><th>&nbsp;</th><th>Cost</th><th>Value</th><th>Gain</th><th>/yr</th></tr></thead><tbody>' +
     rows.map(function(r){
-      return '<tr class="clk '+(sel&&sel.value===r.label?'sel':'')+'" onclick="toggleFilter(\''+OVER_DIM+'\',\''+jq(r.label)+'\')"><td>'+esc(r.label)+'</td><td>'+maskable(fmtK(r.invested))+'</td><td>'+maskable(fmtK(r.value))+
-        '</td><td class="'+cls(r.return_pct)+'">'+(r.return_pct!=null?fmtPct(r.return_pct,0):'-')+'</td><td class="'+cls(r.xirr_pct)+'">'+(r.xirr_pct!=null?fmtPct(r.xirr_pct,0):'-')+'</td></tr>';
+      return '<tr class="clk '+(sel&&sel.value===r.label?'sel':'')+'" onclick="toggleFilter(\''+OVER_DIM+'\',\''+jq(r.label)+'\')"><td>'+esc(r.label)+'</td><td>'+maskable(fmtK(r.value-num(r.unrealized)))+'</td><td>'+maskable(fmtK(r.value))+
+        '</td><td class="'+cls(r.gain)+'">'+maskable((r.gain>=0?'+':'-')+fmtK(Math.abs(r.gain)))+'</td><td class="'+cls(r.xirr_pct)+'">'+(r.xirr_pct!=null?fmtPct(r.xirr_pct,0):'-')+'</td></tr>';
     }).join('')+'</tbody></table>' : '<p class="hint">No segment data yet - it appears after the next snapshot build.</p>';
   const per = (SEGMENTS && SEGMENTS.periods && SEGMENTS.periods[PERIOD]) ? SEGMENTS.periods[PERIOD][OVER_DIM] : null;
   const metricKey = METRIC==='perf' ? 'gain' : METRIC==='ret' ? 'return_pct' : 'contribution_pct';
+  const yrs = periodYears(PERIOD);
   let bars = '<p class="hint">Period figures appear after the next snapshot build.</p>';
   if(per && per.length){
     const vals = per.map(function(r){ return num(r[metricKey]); }), mx = Math.max.apply(null, vals.map(Math.abs).concat([1e-9]));
     bars = per.map(function(r){
       const v = r[metricKey]; const w = Math.abs(num(v))/mx*50, pos = num(v)>=0;
-      const txt = v==null ? '-' : METRIC==='perf' ? (v>=0?'+':'-')+fmtK(Math.abs(v)) : fmtPct(v,1);
-      return '<div class="bar-row"><span class="nm">'+esc(r.label)+'</span><div class="bar-track"><div class="bar-fill" style="'+(pos?'left:50%':'right:50%')+';width:'+w+'%;background:'+(pos?'var(--green)':'var(--red)')+'"></div></div><span class="vv '+cls(v)+'">'+(METRIC==='perf'?maskable(txt):txt)+'</span></div>';
+      let txt = v==null ? '-' : METRIC==='perf' ? (v>=0?'+':'-')+fmtK(Math.abs(v)) : fmtPct(v,1);
+      let ann = '';
+      if(yrs>1.05 && v!=null){
+        if(METRIC==='ret' && v>-100) ann = '<br><small class="hint">\u2248 '+fmtPct((Math.pow(1+v/100,1/yrs)-1)*100,1)+' /yr</small>';
+        else if(METRIC==='perf') ann = '<br><small class="hint">\u2248 '+maskable((v>=0?'+':'-')+fmtK(Math.abs(v)/yrs))+' /yr</small>';
+      }
+      return '<div class="bar-row"><span class="nm">'+esc(r.label)+'</span><div class="bar-track"><div class="bar-fill" style="'+(pos?'left:50%':'right:50%')+';width:'+w+'%;background:'+(pos?'var(--green)':'var(--red)')+'"></div></div><span class="vv '+cls(v)+'">'+(METRIC==='perf'?maskable(txt):txt)+ann+'</span></div>';
     }).join('');
   }
   const periods = [['1Y','1Y'],['3Y','3Y'],['5Y','5Y'],['ITD','Since start']];
@@ -701,9 +731,9 @@ function renderOverview(){
   $('t-over').innerHTML =
     '<div class="card"><div class="lbl">Where is the money working?</div><div class="hint" style="margin:4px 0 6px">Tap a row to filter the whole page to it, the same as tapping a pie slice.</div>' +
     chipsHtml(OVER_DIM,'setOverDim') + tbl +
-    '<div class="hint" style="margin-top:8px"><b>Invested</b> = everything bought here, open and sold, with fees. <b>Return</b> = total gain (price, currency, dividends, after fees) / invested. <b>/yr</b> = money-weighted annual return (XIRR). From the last snapshot build.</div></div>' +
+    '<div class="hint" style="margin-top:8px"><b>Cost</b> = what you paid for what you still hold. <b>Value</b> = worth today. <b>Gain</b> = all profit here, including positions already sold and dividends, after fees. <b>/yr</b> = yearly return on the money while it was invested (XIRR). Last snapshot build.</div></div>' +
     '<div class="card"><div class="lbl">Performance · Return · Contribution by '+DIM_NAMES[OVER_DIM].toLowerCase()+'</div><div class="chips" style="margin-top:8px">'+mbtn+'</div><div class="frow">'+pbtn+'</div>'+bars+
-    '<div class="hint" style="margin-top:6px">'+(METRIC==='perf'?'Gain in dollars over the period.':METRIC==='ret'?'Return on the money at work in the period (start value plus money added, time-weighted).':'Share of the whole portfolio\'s gain each segment produced.')+'</div></div>' +
+    '<div class="hint" style="margin-top:6px">'+(METRIC==='perf'?'Gain in dollars over the period.':METRIC==='ret'?'Return on the money at work in the period (start value plus money added, time-weighted). For periods over a year, the yearly average is shown underneath.':'Share of the whole portfolio\'s gain each segment produced.')+'</div></div>' +
     '<div id="charts"></div>';
   renderCharts();
 }
@@ -777,7 +807,9 @@ function attachCrosshair(id, cfg){
     cd.setAttribute('cx',info.x); cd.setAttribute('cy',info.y); cd.setAttribute('opacity','1');
     let el=$('chart-tooltip'); if(!el){ el=document.createElement('div'); el.id='chart-tooltip'; el.className='chart-tooltip'; document.body.appendChild(el); }
     el.innerHTML='<div class="ct-date">'+info.dateLabel+'</div>'+info.lines.map(function(l){ return '<div class="ct-row"><span class="ct-sw" style="background:'+l.color+'"></span>'+l.label+': <b>'+maskable(l.val)+'</b></div>'; }).join('');
-    el.style.left=(cx+14)+'px'; el.style.top=(cy-10+window.scrollY)+'px'; el.style.opacity='1';
+    el.style.opacity='0'; el.style.left='0px'; el.style.top='0px';
+    const tw=el.offsetWidth, th=el.offsetHeight, vw=document.documentElement.clientWidth;
+    el.style.left=Math.max(6,Math.min(vw-tw-6, cx-tw/2))+'px'; el.style.top=(r.top+window.scrollY-th-10)+'px'; el.style.opacity='1';
   }
   svg.onmousemove=function(e){ move(e.clientX,e.clientY); }; svg.onmouseleave=off;
   svg.ontouchmove=function(e){ if(e.touches&&e.touches[0]){ e.preventDefault(); move(e.touches[0].clientX,e.touches[0].clientY); } }; svg.ontouchend=off;
@@ -847,33 +879,95 @@ function sortOptions(cur){
   return [['positionSize','Position size'],['broker','Broker'],['currency','Currency'],['ticker','Ticker'],['assetType','Asset type'],['companySize','Company size'],['date','Date']]
     .map(function(o){ return '<option value="'+o[0]+'"'+(cur===o[0]?' selected':'')+'>'+o[1]+'</option>'; }).join('');
 }
-function setHoldSort(v){ HOLD_SORT=v; renderHoldings(true); }
+function setHoldSort(v){ HOLD_SORT=v; renderHoldList(); }
 function cvClass(c){ return c>=7.5?'hi':c>=5.5?'mid':'lo'; }
 function editingInside(id){ const a=document.activeElement, el=$(id); return !!(a && el && el.contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)); }
-let HOLD_PENDING = false;
+let HOLD_PENDING = false, HOLD_F = {ticker:'', broker:'', region:'', result:''};
+// XIRR from the ledger for any set of positions (buys out, sells and dividends in, today's value as the last inflow). Before fees.
+function xirrSolve(flows){
+  const pos = flows.some(function(f){ return f.a>0; }), neg = flows.some(function(f){ return f.a<0; });
+  if(!pos || !neg) return null;
+  const t0 = Math.min.apply(null, flows.map(function(f){ return f.d; }));
+  if((Date.now()-t0)/86400000 < 45) return null;
+  const f = function(r){ return flows.reduce(function(s,x){ return s + x.a/Math.pow(1+r,(x.d-t0)/(365.25*86400000)); },0); };
+  let lo=-0.95, hi=10, flo=f(lo), fhi=f(hi); if(flo*fhi>0) return null;
+  for(let i=0;i<80;i++){ const mid=(lo+hi)/2, fm=f(mid); if(flo*fm<=0){ hi=mid; fhi=fm; } else { lo=mid; flo=fm; } }
+  return (lo+hi)/2*100;
+}
+function xirrFor(rows){
+  if(!TXNS) return null; const keys = {}, val = rows.reduce(function(s,h){ keys[rowKey(h)]=1; return s+h._v; },0);
+  const flows = [];
+  TXNS.forEach(function(t){
+    if(['BUY','SELL','DIVIDEND'].indexOf(t.action)===-1 || !keys[t.account_id+'::'+t.asset_id]) return;
+    const d = new Date(String(t.date).slice(0,10)+'T00:00:00').getTime(), amt = Math.abs(num(t.base_currency_amount)); if(isNaN(d)) return;
+    flows.push({d:d, a: t.action==='BUY' ? -amt : amt});
+  });
+  if(val>0) flows.push({d:Date.now(), a:val});
+  return xirrSolve(flows);
+}
+function holdFiltered(){
+  let rows = filtered(openRows());
+  const F = HOLD_F;
+  if(F.ticker) rows = rows.filter(function(h){ return String(h.asset_id).toUpperCase().indexOf(F.ticker)!==-1 || String(h.asset_name||'').toUpperCase().indexOf(F.ticker)!==-1; });
+  if(F.broker) rows = rows.filter(function(h){ return accountBroker(h.account_id)===F.broker; });
+  if(F.region) rows = rows.filter(function(h){ return dimValue(h,'region')===F.region; });
+  if(F.result==='gain') rows = rows.filter(function(h){ return h._unreal>0; });
+  if(F.result==='loss') rows = rows.filter(function(h){ return h._unreal<0; });
+  return rows;
+}
+function setHoldFilter(k, v){ HOLD_F[k] = k==='ticker' ? String(v).toUpperCase() : v; renderHoldList(); }
+function clearHoldFilter(){ HOLD_F = {ticker:'', broker:'', region:'', result:''}; renderHoldings(true); }
 function renderHoldings(force){
   if(!HOME) return;
   if(!force && editingInside('t-hold')){ HOLD_PENDING = true; return; }
   HOLD_PENDING = false;
-  const rows = filtered(openRows()).sort(holdSortFn(HOLD_SORT)), tot = rows.reduce(function(s,h){ return s+h._v; },0);
-  const cards = rows.map(function(h){
+  const brokers = Array.from(new Set(openRows().map(function(h){ return accountBroker(h.account_id); }))).sort();
+  const regions = Array.from(new Set(openRows().map(function(h){ return dimValue(h,'region'); }))).sort();
+  const opt = function(list, cur, all){ return '<option value="">'+all+'</option>'+list.map(function(x){ return '<option'+(cur===x?' selected':'')+'>'+esc(x)+'</option>'; }).join(''); };
+  $('t-hold').innerHTML = '<div class="card"><div class="frow"><input class="f" placeholder="Ticker or name..." size="12" style="text-transform:uppercase" value="'+esc(HOLD_F.ticker)+'" oninput="setHoldFilter(\'ticker\',this.value)">' +
+    '<select class="f" onchange="setHoldFilter(\'broker\',this.value)">'+opt(brokers,HOLD_F.broker,'All brokers')+'</select>' +
+    '<select class="f" onchange="setHoldFilter(\'region\',this.value)">'+opt(regions,HOLD_F.region,'All regions')+'</select>' +
+    '<select class="f" onchange="setHoldFilter(\'result\',this.value)"><option value="">Winners + losers</option><option value="gain"'+(HOLD_F.result==='gain'?' selected':'')+'>Winners only</option><option value="loss"'+(HOLD_F.result==='loss'?' selected':'')+'>Losers only</option></select></div>' +
+    '<div class="frow" style="margin-bottom:0"><select class="f" onchange="setHoldSort(this.value)">'+sortOptions(HOLD_SORT)+'</select><button class="btn" onclick="clearHoldFilter()">Clear</button></div></div>' +
+    '<div id="hold-summary"></div><div id="hold-list"></div>' +
+    '<div class="hint" style="margin-top:6px">Tap a holding for its card: lots, long/short term and harvest tag, manual price, transactions, conviction with history and decisions.</div>';
+  renderHoldList();
+}
+function signedUsd(v){ return (v>=0?'+':'-')+fmtUsd(Math.abs(v)).replace('-',''); }
+function holdSummaryHtml(rows){
+  const v = rows.reduce(function(s,h){ return s+h._v; },0), day = rows.reduce(function(s,h){ return s+h._day; },0), un = rows.reduce(function(s,h){ return s+h._unreal; },0);
+  const cost = v-un, dayPct = (v-day)>0 ? day/(v-day)*100 : null, unPct = cost>0 ? un/cost*100 : null;
+  const all = rows.reduce(function(s,h){ return s+num(h.realized_gain_base)+num(h.dividends_net_base); },0);
+  let x = xirrFor(rows); const anyLocal = HOLD_F.ticker||HOLD_F.broker||HOLD_F.region||HOLD_F.result;
+  if(x===null && !filterChain.length && !anyLocal && HOME.xirr_pct!=null) x = HOME.xirr_pct;
+  const cell = function(l, main, sub, c){ return '<div><div class="lbl">'+l+'</div><div class="mv '+(c||'')+'" style="font-size:13px">'+main+'</div><div class="hint">'+(sub||'')+'</div></div>'; };
+  return '<div class="card"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center">' +
+    cell('Value', maskable(fmtUsd(v)), rows.length+' positions') +
+    cell('Today', maskable(signedUsd(day)), dayPct!=null?fmtPct(dayPct,2):'', cls(day)) +
+    cell('Total gain', unPct!=null?fmtPct(unPct,1):'-', maskable(signedUsd(un)), cls(un)) +
+    cell('XIRR', x!=null?fmtPct(x,1):'-', 'per year', cls(x)) + '</div>' +
+    (includeAll && Math.abs(all)>0.5 ? '<div class="hint" style="margin-top:8px;text-align:center">Plus '+maskable(signedUsd(all))+' from sold positions and dividends in these tickers</div>' : '') + '</div>';
+}
+function renderHoldList(){
+  const list = $('hold-list'); if(!list) return;
+  const rows = holdFiltered().sort(holdSortFn(HOLD_SORT));
+  $('hold-summary').innerHTML = holdSummaryHtml(rows);
+  list.innerHTML = rows.map(function(h){
     const key = rowKey(h), open = EXPANDED===key;
     const dayDir = cls(h._dayPct), totDir = cls(h._totPct), stale = h.price_stale_days!=null && h.price_stale_days>10;
     const dispLocal = h.currency!==baseCcy() ? fmtMoney(num(h.market_value_trade_ccy), h.currency) : '';
     const cv = isNum(h.conviction) ? '<span class="cv '+cvClass(Number(h.conviction))+'">'+Number(h.conviction).toFixed(1)+'</span>' : '<span class="cv">-</span>';
     return '<div class="hcard '+(open?'expanded':'')+'" id="hc-'+esc(key)+'"><div class="hrow" onclick="toggleCard(\''+jq(key)+'\')">' +
-      '<div class="hl"><div><span class="tk">'+esc(h.asset_id)+'</span><span class="qty">x'+fmtQty(h.quantity)+'</span>'+cv+(h._live?'':'')+'</div>' +
-      '<div class="nm2">'+esc(h.asset_name||'')+' · '+esc(accountBroker(h.account_id))+' · '+esc(h.region||'')+'</div></div>' +
+      '<div class="hl"><div><span class="tk">'+esc(h.asset_id)+'</span><span class="qty">x'+fmtQty(h.quantity)+'</span>'+cv+'</div>' +
+      '<div class="nm2">'+esc(h.asset_name||'')+' · '+esc(accountBroker(h.account_id))+'</div>' +
+      '<div class="nm2">LTP <b style="color:var(--text)">'+maskable(h._ltp!=null?fmtMoney(h._ltp,h.currency):'-')+'</b>'+(h._live?' <span class="up">●</span>':'')+(stale?' <span class="neg">'+h.price_stale_days+'d stale</span>':'')+'</div></div>' +
       '<div class="hr"><div class="mv '+(h.is_estimated?'est':'')+'">'+maskable(fmtUsd(h._v))+(h.is_estimated?' *':'')+'</div>'+(dispLocal?'<small>'+maskable(dispLocal)+'</small>':'')+
-      '<small><b class="'+dayDir+'">'+(h._dayPct==null?'-':fmtPct(h._dayPct,2))+'</b> today · <b class="'+totDir+'">'+(h._totPct==null?'-':fmtPct(h._totPct,1))+'</b> all-time</small>'+
-      (stale?'<small class="neg">'+h.price_stale_days+'d stale</small>':'')+'</div></div>' + (open ? cardPanel(h) : '') + '</div>';
-  }).join('');
-  $('t-hold').innerHTML = '<div class="frow"><select class="f" onchange="setHoldSort(this.value)">'+sortOptions(HOLD_SORT)+'</select><span class="hint">'+rows.length+' positions · '+maskable(fmtUsd(tot))+'</span></div>' +
-    (cards || '<p class="hint">No positions match the current filter.</p>') +
-    '<div class="hint" style="margin-top:6px">Tap a holding for its card: lots, long/short term and harvest tag, manual price, transactions, conviction with history and decisions.</div>';
+      '<small><b class="'+dayDir+'">'+(h._dayPct==null?'-':fmtPct(h._dayPct,2))+'</b> <b class="'+dayDir+'">'+maskable(signedUsd(h._day))+'</b> today</small>' +
+      '<small><b class="'+totDir+'">'+(h._totPct==null?'-':fmtPct(h._totPct,1))+'</b> <b class="'+totDir+'">'+maskable(signedUsd(h._unreal))+'</b> total</small></div></div>' + (open ? cardPanel(h) : '') + '</div>';
+  }).join('') || '<p class="hint">No positions match the current filters.</p>';
   if(EXPANDED) loadConviction(EXPANDED.split('::')[1]);
 }
-function toggleCard(key){ EXPANDED = (EXPANDED===key) ? null : key; renderHoldings(true); }
+function toggleCard(key){ EXPANDED = (EXPANDED===key) ? null : key; renderHoldList(); }
 function openTicker(assetId){
   filterChain = []; const h = openRows().find(function(x){ return x.asset_id===assetId; }); if(h) EXPANDED = rowKey(h);
   tab('hold'); renderAll(); const el = h && $('hc-'+rowKey(h)); if(el) el.scrollIntoView({block:'center'});
@@ -891,7 +985,7 @@ function cardPanel(h){
   const lots = LOTS ? LOTS.filter(function(l){ return l.account_id===h.account_id && l.asset_id===h.asset_id; }) : null;
   const ltp = h.latest_price_trade_ccy!=null ? fmtMoney(h.latest_price_trade_ccy, h.currency) : '-';
   let p = '<div class="panel" onclick="event.stopPropagation()"><div class="meta-line">LTP '+maskable(ltp)+' · Avg cost '+(h.avg_cost_per_unit!=null?Number(h.avg_cost_per_unit).toFixed(4):'-')+' '+esc(h.currency)+
-    ' · Invested '+maskable(h.cost_basis_trade_ccy!=null?fmtMoney(h.cost_basis_trade_ccy,h.currency):'-')+'<br>Realized '+maskable(fmtUsd(h.realized_gain_base))+' · Dividends '+maskable(fmtUsd(h.dividends_net_base))+' · Fees paid '+maskable(fmtUsd(h.total_fees_paid_base))+
+    ' · Invested '+maskable(h.cost_basis_trade_ccy!=null?fmtMoney(h.cost_basis_trade_ccy,h.currency):'-')+'<br>XIRR '+(function(){ const x=xirrFor([h]); return x!=null?'<b class="'+cls(x)+'">'+fmtPct(x,1)+'/yr</b> (approx., before fees)':'-'; })()+'<br>Realized '+maskable(fmtUsd(h.realized_gain_base))+' · Dividends '+maskable(fmtUsd(h.dividends_net_base))+' · Fees paid '+maskable(fmtUsd(h.total_fees_paid_base))+
     (h.is_estimated?'<br><span style="color:var(--orange)">* At cost - no real price has been fetched for this ticker.</span>':'')+(h.priced_from_ledger?'<br><span style="color:var(--orange)">Price taken from your last trade (no market price source).</span>':'')+'</div>';
   p += '<div class="frow owner-only"><button class="btn" onclick="openTxnModal(\'BUY\',{account_id:\''+jq(h.account_id)+'\',asset_id:\''+jq(h.asset_id)+'\'})">Buy more</button><button class="btn" onclick="openTxnModal(\'SELL\',{account_id:\''+jq(h.account_id)+'\',asset_id:\''+jq(h.asset_id)+'\'})">Sell</button><button class="btn" onclick="openTxnModal(\'DIVIDEND\',{account_id:\''+jq(h.account_id)+'\',asset_id:\''+jq(h.asset_id)+'\'})">Dividend</button></div>';
   if(h.manual_override) p += '<div class="frow owner-only"><input class="f" type="number" step="any" id="mp-'+esc(key)+'" placeholder="Set price ('+esc(h.currency)+')"><button class="btn" onclick="saveManualPrice(\''+jq(key)+'\')">Save price</button><button class="btn" onclick="resumeAuto(\''+jq(key)+'\')">Resume auto-fetch</button></div>';
@@ -937,7 +1031,7 @@ async function saveConviction(assetId){
   try{
     const r = await loadData('update_conviction',{asset_id:assetId, conviction:v, note:note}); if(r.success===false) throw new Error(r.error);
     HOLDINGS.forEach(function(h){ if(h.asset_id===assetId) h.conviction = v; }); delete CONV[assetId];
-    showToast('✓ Conviction for '+assetId+' set to '+v,'success'); renderHoldings(true); watchForRebuild();
+    showToast('✓ Conviction for '+assetId+' set to '+v,'success'); renderHoldList(); watchForRebuild();
   }catch(e){ showToast('✗ Not saved - '+e.message,'error'); }
 }
 async function saveDecision(assetId){
@@ -991,7 +1085,7 @@ function closedGroups(){
 function renderClosed(){
   if(!HOME) return;
   if(editingInside('t-closed')) return;
-  const brokers = Array.from(new Set(ACCOUNTS.map(function(a){ return a.broker; }).filter(Boolean))).sort();
+  const brokers = Array.from(new Set(ACCOUNTS.map(function(a){ return a.broker; }).concat((CLOSED||[]).map(function(l){ return accountBroker(l.account_id); })).concat(HOLDINGS.map(function(h){ return accountBroker(h.account_id); })).filter(Boolean))).sort();
   const ca = (HOME.closed_accounts || []);
   const fx = HOME.fx_snapshot || {};
   const acctHtml = ca.length ? ca.map(function(c){
@@ -1060,7 +1154,7 @@ function renderWatchlist(){
     const id = jq(w.watchlist_id);
     return '<div class="wl-row '+(w.in_zone?'inzone':'')+'"><div class="wl-left"><div><span class="tk">'+esc(w.ticker)+'</span> '+dist+(w.priority?' <span class="badge b">'+esc(w.priority)+'</span>':'')+'</div>' +
       '<div class="wl-meta">'+[esc(w.company||''), esc(w.sector||''), 'Entry '+zone, wk, esc(w.notes||'')].filter(Boolean).join(' · ')+'</div></div>' +
-      '<div class="wl-right"><div class="mv">'+maskable(cur)+'</div><div class="owner-only"><button class="btn" onclick="editWatchlistItem(\''+id+'\')">Edit</button><button class="btn" onclick="buyFromWatchlist(\''+jq(w.ticker)+'\')">Buy</button><button class="btn" onclick="removeWatchlistItem(\''+id+'\')">Remove</button></div></div></div>';
+      '<div class="wl-right"><div class="mv">'+maskable(cur)+'</div><div class="btns owner-only"><button class="btn" onclick="editWatchlistItem(\''+id+'\')">Edit</button><button class="btn" onclick="buyFromWatchlist(\''+jq(w.ticker)+'\')">Buy</button><button class="btn" onclick="removeWatchlistItem(\''+id+'\')">Remove</button></div></div></div>';
   }).join('');
 }
 async function removeWatchlistItem(id){
@@ -1080,6 +1174,7 @@ function checkWatchlistAlerts(list){
   $('alert-title').textContent = inZone.length>1 ? inZone.length+' watchlist targets in zone' : 'Watchlist target in zone';
   $('alert-text').innerHTML = inZone.map(function(w){ return '<div><b>'+esc(w.ticker)+'</b> '+maskable(fmtMoney(w.current_price,w.price_currency))+' <span class="hint">(buy up to '+maskable(fmtMoney(w.entry_high,w.price_currency))+')</span></div>'; }).join('');
   $('alert-banner').classList.add('show');
+  clearTimeout(checkWatchlistAlerts.t); checkWatchlistAlerts.t = setTimeout(hideAlertBanner, 9000);
 }
 function hideAlertBanner(){ $('alert-banner').classList.remove('show'); ALERT_CURRENT.forEach(function(t){ if(ALERT_SEEN.indexOf(t)===-1) ALERT_SEEN.push(t); }); saveAlertSeen(); }
 function openWatchlistFromAlert(){ hideAlertBanner(); tab('wl'); }
@@ -1113,12 +1208,12 @@ function openTxnModal(action, preset){
   if(preset.account_id) TXN_STATE.account_id = preset.account_id;
   if(preset.asset_id) TXN_STATE.asset_id = preset.asset_id;
   if(preset.wl){ TXN_STATE.fromWl = preset.wl.watchlist_id; TXN_STATE.why = preset.wl.notes || ''; TXN_STATE.wlHint = ''; }
-  $('txn-modal-overlay').classList.add('show'); renderTxnModalBody();
+  $('txn-modal-overlay').classList.add('show'); document.body.classList.add('modal-open'); window.scrollTo(0,0); renderTxnModalBody();
   if(TXN_STATE.account_id){ refreshFx(); }
   if(TXN_STATE.asset_id){ maybePrefillQuote(); }
   if(TXN_ALL_ASSETS===null) loadData('get_all_assets_for_form').then(function(r){ TXN_ALL_ASSETS = r.assets||[]; syncNewTickerFields(); syncDecisionArea(); }).catch(function(){ TXN_ALL_ASSETS = []; });
 }
-function closeTxnModal(){ QUOTE_SEQ++; $('txn-modal-overlay').classList.remove('show'); }
+function closeTxnModal(){ QUOTE_SEQ++; $('txn-modal-overlay').classList.remove('show'); document.body.classList.remove('modal-open'); }
 function buyFromWatchlist(ticker){
   const w = (WATCHLIST||[]).find(function(x){ return x.ticker===ticker; });
   const known = HOLDINGS.find(function(h){ return h.asset_id===ticker; });
