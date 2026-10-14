@@ -111,16 +111,14 @@ button{transition:transform .08s,filter .08s}
 tr.tot td{border-top:1px solid var(--border);font-weight:600;color:var(--text)}
 .runner.fig{background:none;border:0;box-shadow:none;width:auto;height:auto;top:13px;font-size:22px;line-height:1;cursor:pointer;z-index:2}
 .runner.fig .fi{display:inline-block}.runner.fig .fl{display:inline-block}.runner.ahead .fl{transform:scaleX(-1)}
-.runner.ahead{filter:drop-shadow(0 0 7px rgba(255,120,30,.95))}.runner.ahead .fi{animation:gallop .45s ease-in-out infinite alternate}
+.runner.cele{filter:drop-shadow(0 0 7px rgba(255,120,30,.95))}.runner.cele .fi{animation:gallop .45s ease-in-out infinite alternate}
 @keyframes gallop{from{transform:translateY(0) rotate(-4deg)}to{transform:translateY(-3px) rotate(4deg)}}
 .fire{position:absolute;font-size:12px;pointer-events:none;animation:flick .6s ease-in-out infinite alternate}
 .fire.f1{left:-10px;top:-8px}.fire.f2{left:14px;top:-11px;animation-delay:.25s}.fire.f3{left:2px;top:-16px;animation-delay:.4s;font-size:14px}
 @keyframes flick{from{transform:scale(.8) translateY(0);opacity:.75}to{transform:scale(1.2) translateY(-3px);opacity:1}}
-.runner.behind .fi{animation:plod var(--slow,2.6s) ease-in-out infinite}
 @keyframes plod{0%,100%{transform:translateX(0) rotate(0)}50%{transform:translateX(3px) rotate(2deg)}}
 .sweat{position:absolute;right:-5px;top:-3px;font-size:10px;pointer-events:none;animation:drip 1.7s ease-in infinite}
 @keyframes drip{0%{transform:translateY(0);opacity:0}20%{opacity:1}100%{transform:translateY(14px);opacity:0}}
-.runner.pace .fi{animation:jog .6s ease-in-out infinite alternate}
 @keyframes jog{from{transform:translateY(0)}to{transform:translateY(-2px)}}
 @media (prefers-reduced-motion:reduce){.runner .fi,.fire,.sweat{animation:none}}
 /* mini stats */
@@ -666,10 +664,10 @@ function runnerHtml(ahead, J, vis, burst){
   const band = (CONFIG && isNum(CONFIG.pace_band_pct) && Number(CONFIG.pace_band_pct)>=0) ? Number(CONFIG.pace_band_pct) : 1;
   const mood = ahead===null ? 'pace' : pctGap>band ? 'ahead' : pctGap<-band ? 'behind' : 'pace';
   const face = mood==='ahead' ? '\uD83D\uDC0E' : mood==='behind' ? '\uD83D\uDC22' : '\uD83C\uDFC3';
-  const extra = mood==='ahead' ? '<span class="fire f1">\uD83D\uDD25</span><span class="fire f2">\uD83D\uDD25</span>'+(pctGap>10?'<span class="fire f3">\uD83D\uDD25</span>':'') : mood==='behind' ? '<span class="sweat">\uD83D\uDCA7</span>' : '';
+  const extra = (mood==='ahead' && burst) ? '<span class="fire f1">\uD83D\uDD25</span><span class="fire f2">\uD83D\uDD25</span>'+(pctGap>10?'<span class="fire f3">\uD83D\uDD25</span>':'') : '';
   const label = ahead===null ? 'No plan yet' : (ahead>=0 ? fmtK(ahead)+' ahead of the plan path' : fmtK(-ahead)+' behind the plan path');
   const slow = mood==='behind' ? ';--slow:'+(Math.min(4.5, 2.2 + Math.abs(pctGap)/8)).toFixed(1)+'s' : '';
-  return '<div class="runner fig '+mood+'" style="left:'+Math.max(2,Math.min(98,vis))+'%'+slow+'" onclick="showToast(\''+jq(valuesHidden?'Plan gap hidden':label)+'\',\'success\')" title="'+esc(valuesHidden?'':label)+'"><span class="fi"><span class="fl">'+face+'</span></span>'+extra+burst;
+  return '<div class="runner fig '+mood+(burst?' cele':'')+'" style="left:'+Math.max(2,Math.min(98,vis))+'%'+slow+'" onclick="showToast(\''+jq(valuesHidden?'Plan gap hidden':label)+'\',\'success\')" title="'+esc(valuesHidden?'':label)+'"><span class="fi"><span class="fl">'+face+'</span></span>'+extra+burst;
 }
 function renderJourney(){
   const J = HOME.journey || {}, T = totals();
