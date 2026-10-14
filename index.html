@@ -109,8 +109,8 @@ button{transition:transform .08s,filter .08s}
 .rt{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:6px;font-size:10px;padding:4px 0;border-bottom:1px solid var(--border-soft);align-items:baseline}
 .rt.one{grid-template-columns:1.25fr 1fr}.rt .k{color:var(--text-faint)}.rt span:not(.k){text-align:right}.rt.b{font-weight:600}.rt.head{color:var(--text-faint);font-size:9px;letter-spacing:.08em}
 tr.tot td{border-top:1px solid var(--border);font-weight:600;color:var(--text)}
-.runner.fig{background:none;border:0;box-shadow:none;width:auto;height:auto;top:4px;font-size:24px;line-height:1;cursor:pointer;z-index:2}
-.runner.fig .fi{display:inline-block}
+.runner.fig{background:none;border:0;box-shadow:none;width:auto;height:auto;top:13px;font-size:22px;line-height:1;cursor:pointer;z-index:2}
+.runner.fig .fi{display:inline-block}.runner.fig .fl{display:inline-block}.runner.ahead .fl{transform:scaleX(-1)}
 .runner.ahead{filter:drop-shadow(0 0 7px rgba(255,120,30,.95))}.runner.ahead .fi{animation:gallop .45s ease-in-out infinite alternate}
 @keyframes gallop{from{transform:translateY(0) rotate(-4deg)}to{transform:translateY(-3px) rotate(4deg)}}
 .fire{position:absolute;font-size:12px;pointer-events:none;animation:flick .6s ease-in-out infinite alternate}
@@ -669,7 +669,7 @@ function runnerHtml(ahead, J, vis, burst){
   const extra = mood==='ahead' ? '<span class="fire f1">\uD83D\uDD25</span><span class="fire f2">\uD83D\uDD25</span>'+(pctGap>10?'<span class="fire f3">\uD83D\uDD25</span>':'') : mood==='behind' ? '<span class="sweat">\uD83D\uDCA7</span>' : '';
   const label = ahead===null ? 'No plan yet' : (ahead>=0 ? fmtK(ahead)+' ahead of the plan path' : fmtK(-ahead)+' behind the plan path');
   const slow = mood==='behind' ? ';--slow:'+(Math.min(4.5, 2.2 + Math.abs(pctGap)/8)).toFixed(1)+'s' : '';
-  return '<div class="runner fig '+mood+'" style="left:'+Math.max(2,Math.min(98,vis))+'%'+slow+'" onclick="showToast(\''+jq(valuesHidden?'Plan gap hidden':label)+'\',\'success\')" title="'+esc(valuesHidden?'':label)+'"><span class="fi">'+face+'</span>'+extra+burst;
+  return '<div class="runner fig '+mood+'" style="left:'+Math.max(2,Math.min(98,vis))+'%'+slow+'" onclick="showToast(\''+jq(valuesHidden?'Plan gap hidden':label)+'\',\'success\')" title="'+esc(valuesHidden?'':label)+'"><span class="fi"><span class="fl">'+face+'</span></span>'+extra+burst;
 }
 function renderJourney(){
   const J = HOME.journey || {}, T = totals();
