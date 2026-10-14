@@ -102,6 +102,27 @@ button{transition:transform .08s,filter .08s}
 #celeb .csub{position:absolute;left:0;right:0;top:calc(38% + 48px);text-align:center;font-size:11px;letter-spacing:.14em;color:var(--text-dim)}
 @keyframes cmsg{0%{opacity:0;transform:scale(.6)}60%{opacity:1;transform:scale(1.08)}100%{transform:scale(1)}}
 @media (prefers-reduced-motion:reduce){#celeb,.pole.passed::before{animation:none}}
+/* settings strip, local-currency tables, runner */
+.setbar{display:flex;gap:6px;flex-wrap:wrap;margin:-2px 0 10px}
+.pill{font-size:9.5px;border:1px solid var(--border);background:none;color:var(--text-dim);border-radius:14px;padding:5px 10px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.pill.on{border-color:var(--gold);color:var(--gold-bright);background:rgba(201,162,39,.1)}.pill .tick{display:inline-block;width:9px;text-align:center}
+.rt{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:6px;font-size:10px;padding:4px 0;border-bottom:1px solid var(--border-soft);align-items:baseline}
+.rt.one{grid-template-columns:1.25fr 1fr}.rt .k{color:var(--text-faint)}.rt span:not(.k){text-align:right}.rt.b{font-weight:600}.rt.head{color:var(--text-faint);font-size:9px;letter-spacing:.08em}
+tr.tot td{border-top:1px solid var(--border);font-weight:600;color:var(--text)}
+.runner.fig{background:none;border:0;box-shadow:none;width:auto;height:auto;top:4px;font-size:24px;line-height:1;cursor:pointer;z-index:2}
+.runner.fig .fi{display:inline-block}
+.runner.ahead{filter:drop-shadow(0 0 7px rgba(255,120,30,.95))}.runner.ahead .fi{animation:gallop .45s ease-in-out infinite alternate}
+@keyframes gallop{from{transform:translateY(0) rotate(-4deg)}to{transform:translateY(-3px) rotate(4deg)}}
+.fire{position:absolute;font-size:12px;pointer-events:none;animation:flick .6s ease-in-out infinite alternate}
+.fire.f1{left:-10px;top:-8px}.fire.f2{left:14px;top:-11px;animation-delay:.25s}.fire.f3{left:2px;top:-16px;animation-delay:.4s;font-size:14px}
+@keyframes flick{from{transform:scale(.8) translateY(0);opacity:.75}to{transform:scale(1.2) translateY(-3px);opacity:1}}
+.runner.behind .fi{animation:plod var(--slow,2.6s) ease-in-out infinite}
+@keyframes plod{0%,100%{transform:translateX(0) rotate(0)}50%{transform:translateX(3px) rotate(2deg)}}
+.sweat{position:absolute;right:-5px;top:-3px;font-size:10px;pointer-events:none;animation:drip 1.7s ease-in infinite}
+@keyframes drip{0%{transform:translateY(0);opacity:0}20%{opacity:1}100%{transform:translateY(14px);opacity:0}}
+.runner.pace .fi{animation:jog .6s ease-in-out infinite alternate}
+@keyframes jog{from{transform:translateY(0)}to{transform:translateY(-2px)}}
+@media (prefers-reduced-motion:reduce){.runner .fi,.fire,.sweat{animation:none}}
 /* mini stats */
 .mini{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
 .mini .card{margin:0;padding:8px 5px;text-align:center;cursor:default}
@@ -241,6 +262,7 @@ details.txn-extra summary{font-size:10px;color:var(--gold-bright);cursor:pointer
       <button class="ib owner-only" id="refresh-btn" onclick="refreshPrices()" title="Fetch fresh prices"><span class="rot">&#8635;</span></button>
     </span>
   </div>
+  <div class="setbar" id="setbar"></div>
   <div id="journey"></div>
   <div class="fbar" id="fbar"><span id="ftxt"></span><button onclick="clearFilter()">Clear</button></div>
   <div class="mini" id="mini"></div>
@@ -382,7 +404,7 @@ function applyLive(){
   HOLDINGS.forEach(function(h){
     const v0 = snapVal(h);
     h._v = v0; h._unreal = num(h.unrealized_gain_base); h._day = num(h.day_gain_base); h._dayPct = h.day_gain_pct; h._live = false;
-    h._ltp = h.latest_price_trade_ccy;
+    h._ltp = h.latest_price_trade_ccy; h._vL = isNum(h.market_value_trade_ccy) ? num(h.market_value_trade_ccy) : null;
     if(isCash(h) || num(h.quantity) <= 1e-9) return;
     const L = LIVE && LIVE.prices && LIVE.prices[h.asset_id];
     if(L && num(h.latest_price) > 0 && L.p > 0 && (!L.ccy || !h.price_currency || String(L.ccy).toUpperCase()===String(h.price_currency).toUpperCase())){
@@ -390,7 +412,7 @@ function applyLive(){
       if(h.currency && h.currency!==base && LIVE.fx && LIVE.fx[h.currency] && fxs[h.currency]) fxr = LIVE.fx[h.currency] / fxs[h.currency];
       if(ratio > 0.5 && ratio < 2 && fxr > 0.8 && fxr < 1.25){
         if(h.currency===String(L.ccy||h.price_currency).toUpperCase()) h._ltp = L.p;
-        h._v = v0 * ratio * fxr; h._unreal = num(h.unrealized_gain_base) + (h._v - v0); h._live = true; liveCount++;
+        h._v = v0 * ratio * fxr; if(h._vL!==null) h._vL = num(h.market_value_trade_ccy) * ratio; h._unreal = num(h.unrealized_gain_base) + (h._v - v0); h._live = true; liveCount++;
         if(L.prev > 0){ h._day = h._v * (1 - L.prev / L.p); h._dayPct = (L.p / L.prev - 1) * 100; }
       }
     }
@@ -562,7 +584,7 @@ function filterText(){ return filterChain.map(function(f){ return DIM_NAMES[f.di
 
 function renderAll(fromLive){
   if(!HOME) return;
-  setStatusLine(); renderBadges(); renderJourney(); renderMini(); renderFilterBar(); renderPool();
+  setStatusLine(); renderBadges(); renderSetBar(); renderJourney(); renderMini(); renderFilterBar(); renderPool();
   renderTabBody(ACTIVE_TAB);
   $('foot-hint').textContent = 'Figures come from your Sheet (last build) with live prices layered on top. Auto-refreshes every 5 min.';
 }
@@ -638,6 +660,17 @@ function milestoneVisual(realPct, pcts){
   }
   return 100;
 }
+// the runner changes with how you stand against the plan: fiery horse when ahead, jogger on pace, tired turtle when behind
+function runnerHtml(ahead, J, vis, burst){
+  const planV = J.plan_value_today, pctGap = (planV>0 && ahead!==null) ? ahead/planV*100 : 0;
+  const band = (CONFIG && isNum(CONFIG.pace_band_pct) && Number(CONFIG.pace_band_pct)>=0) ? Number(CONFIG.pace_band_pct) : 1;
+  const mood = ahead===null ? 'pace' : pctGap>band ? 'ahead' : pctGap<-band ? 'behind' : 'pace';
+  const face = mood==='ahead' ? '\uD83D\uDC0E' : mood==='behind' ? '\uD83D\uDC22' : '\uD83C\uDFC3';
+  const extra = mood==='ahead' ? '<span class="fire f1">\uD83D\uDD25</span><span class="fire f2">\uD83D\uDD25</span>'+(pctGap>10?'<span class="fire f3">\uD83D\uDD25</span>':'') : mood==='behind' ? '<span class="sweat">\uD83D\uDCA7</span>' : '';
+  const label = ahead===null ? 'No plan yet' : (ahead>=0 ? fmtK(ahead)+' ahead of the plan path' : fmtK(-ahead)+' behind the plan path');
+  const slow = mood==='behind' ? ';--slow:'+(Math.min(4.5, 2.2 + Math.abs(pctGap)/8)).toFixed(1)+'s' : '';
+  return '<div class="runner fig '+mood+'" style="left:'+Math.max(2,Math.min(98,vis))+'%'+slow+'" onclick="showToast(\''+jq(valuesHidden?'Plan gap hidden':label)+'\',\'success\')" title="'+esc(valuesHidden?'':label)+'"><span class="fi">'+face+'</span>'+extra+burst;
+}
 function renderJourney(){
   const J = HOME.journey || {}, T = totals();
   if(!J.goal_amount){ $('journey').innerHTML = '<div class="card"><div class="lbl">Journey</div><div class="big">'+maskable(fmtUsd(T.value))+'</div><p class="hint">No active row in <b>targets</b>.</p></div>'; return; }
@@ -657,7 +690,7 @@ function renderJourney(){
   const track = '<div class="track-wrap"><div class="track"><div class="track-fill" style="width:'+vis+'%"></div></div>' +
     ms.map(function(m,i){ const l = milestoneVisual(m.pct, pcts), last = i===lastIdx, goal = m.pct>=100;
       return '<div class="pole '+(T.value>=m.amount?'passed ':'')+(goal?'goal':'')+'" style="left:'+l+'%;--fc:'+flagColors[i%flagColors.length]+'"></div><div class="mlabel '+(last?'last':'')+'" style="left:'+l+'%"><b>'+m.pct+'%</b>'+maskable(fmtK(m.amount))+'</div>'; }).join('') +
-    '<div class="runner" style="left:'+Math.max(2,Math.min(98,vis))+'%">'+burst+'</div></div>';
+    runnerHtml(ahead, J, vis, burst) + '</div></div>';
   const rate = J.rate_used_pct;
   const gridRows = [
     ['Plan says today', J.plan_value_today!=null ? maskable(fmtUsd(J.plan_value_today)) : '-'],
@@ -785,11 +818,21 @@ function setPeriod(p){ PERIOD=p; renderOverview(); }
 function renderOverview(){
   if(!HOME) return;
   const rows = segRows(OVER_DIM), sel = filterChain.find(function(f){ return f.dim===OVER_DIM; });
-  const tbl = rows.length ? '<table><thead><tr><th>&nbsp;</th><th>Cost</th><th>Value</th><th>Gain</th><th>/yr</th></tr></thead><tbody>' +
-    rows.map(function(r){
-      return '<tr class="clk '+(sel&&sel.value===r.label?'sel':'')+'" onclick="toggleFilter(\''+OVER_DIM+'\',\''+jq(r.label)+'\')"><td>'+esc(r.label)+'</td><td>'+maskable(fmtK(r.value-num(r.unrealized)))+'</td><td>'+maskable(fmtK(r.value))+
-        '</td><td class="'+cls(r.gain)+'">'+maskable((r.gain>=0?'+':'-')+fmtK(Math.abs(r.gain)))+'</td><td class="'+cls(r.xirr_pct)+'">'+(r.xirr_pct!=null?fmtPct(r.xirr_pct,0):'-')+'</td></tr>';
-    }).join('')+'</tbody></table>' : '<p class="hint">No segment data yet - it appears after the next snapshot build.</p>';
+  const locAgg = function(r){
+    const hs = HOLDINGS.filter(function(h){ return !isCash(h) && dimValue(h,OVER_DIM)===r.label; });
+    if(!hs.length) return null; const S = statsFor(hs); return (S.local && S.A.vL!=null) ? S : null;
+  };
+  let tCost=0, tVal=0, tGain=0;
+  const body = rows.map(function(r){
+    const S = locAgg(r), un = num(r.unrealized), gainU = includeAll ? num(r.gain) : un, costU = num(r.value)-un;
+    tCost += costU; tVal += num(r.value); tGain += gainU;
+    const c = S ? S.ccy : null, gain = S ? S.loc.amt : gainU, x = S ? S.xirrL : r.xirr_pct;
+    const cost = S ? fmtKLocal(S.A.cL,c) : fmtK(costU), val = S ? fmtKLocal(S.A.vL,c) : fmtK(num(r.value));
+    return '<tr class="clk '+(sel&&sel.value===r.label?'sel':'')+'" onclick="toggleFilter(\''+OVER_DIM+'\',\''+jq(r.label)+'\')"><td>'+esc(r.label)+'</td><td>'+maskable(cost)+'</td><td>'+maskable(val)+
+      '</td><td class="'+cls(gain)+'">'+maskable((gain>=0?'+':'-')+(S ? fmtKLocal(Math.abs(gain),c) : fmtK(Math.abs(gain))))+(S && S.fxPts!=null ? '<br><small class="hint">$ '+fmtPct(S.usd.pct,1)+' \u00B7 fx '+(S.fxPts>=0?'+':'')+S.fxPts.toFixed(1)+'</small>' : '')+'</td><td class="'+cls(x)+'">'+(x!=null?fmtPct(x,0):'-')+'</td></tr>';
+  }).join('');
+  const tbl = rows.length ? '<table><thead><tr><th>&nbsp;</th><th>Cost</th><th>Value</th><th>Gain</th><th>/yr</th></tr></thead><tbody>' + body +
+    '<tr class="tot"><td>Total $</td><td>'+maskable(fmtK(tCost))+'</td><td>'+maskable(fmtK(tVal))+'</td><td class="'+cls(tGain)+'">'+maskable((tGain>=0?'+':'-')+fmtK(Math.abs(tGain)))+'</td><td>'+(HOME.xirr_pct!=null?fmtPct(HOME.xirr_pct,0):'-')+'</td></tr></tbody></table>' : '<p class="hint">No segment data yet - it appears after the next snapshot build.</p>';
   const per0 = (SEGMENTS && SEGMENTS.periods && SEGMENTS.periods[PERIOD]) ? SEGMENTS.periods[PERIOD][OVER_DIM] : null, per = per0 ? orderDim(OVER_DIM, per0) : null;
   const metricKey = METRIC==='perf' ? 'gain' : METRIC==='ret' ? 'return_pct' : 'contribution_pct';
   const yrs = periodYears(PERIOD);
@@ -813,7 +856,7 @@ function renderOverview(){
   $('t-over').innerHTML =
     '<div class="card"><div class="lbl">Where is the money working?</div><div class="hint" style="margin:4px 0 6px">Tap a row to filter the whole page to it, the same as tapping a pie slice.</div>' +
     chipsHtml(OVER_DIM,'setOverDim') + tbl +
-    '<div class="hint" style="margin-top:8px"><b>Cost</b> = what you paid for what you still hold. <b>Value</b> = worth today. <b>Gain</b> = all profit here, including positions already sold and dividends, after fees. <b>/yr</b> = yearly return on the money while it was invested (XIRR). Last snapshot build.</div></div>' +
+    '<div class="hint" style="margin-top:8px"><b>Cost</b> = what you paid for what you still hold. <b>Value</b> = worth today. <b>Gain</b> = profit here after fees (with the toggle on, including positions already sold and dividends). Rows that hold one foreign currency show it in that currency, as your broker does; the Total is in dollars. <b>/yr</b> = yearly return on the money while it was invested (XIRR). Last snapshot build.</div></div>' +
     '<div class="card"><div class="lbl">Performance · Return · Contribution by '+DIM_NAMES[OVER_DIM].toLowerCase()+'</div><div class="chips" style="margin-top:8px">'+mbtn+'</div><div class="frow">'+pbtn+'</div>'+bars+
     '<div class="hint" style="margin-top:6px">'+(METRIC==='perf'?'Gain in dollars over the period.':METRIC==='ret'?'Return on the money at work in the period (start value plus money added, time-weighted). For periods over a year, the yearly average is shown underneath.':'Share of the whole portfolio\'s gain each segment produced.')+'</div></div>' +
     '<div id="charts"></div>';
@@ -915,7 +958,6 @@ function colorFor(label){
 
 // ---------- allocate ----------
 function setAllocDim(d){ ALLOC_DIM=d; renderAllocate(); }
-function toggleIncludeAll(){ includeAll=!includeAll; renderAll(); }
 function aggregateDim(dim){
   const rows = openRows().filter(function(h){ return passes(h, filterChain, dim); }), map = {}, local = {};
   rows.forEach(function(h){ const l=dimValue(h,dim); map[l]=(map[l]||0)+h._v; local[l]=(local[l]||0)+num(h.market_value_trade_ccy); });
@@ -945,8 +987,7 @@ function renderAllocate(){
   const T = totals();
   $('t-alloc').innerHTML = '<div class="card">'+chipsHtml(dim,'setAllocDim')+
     (list.length ? '<div class="piewrap"><svg class="pie" viewBox="0 0 100 100" width="130" height="130">'+svg+'</svg><div class="leg">'+leg+'</div></div>' : '<p class="hint">No open positions match.</p>')+
-    '<div class="hint" style="margin-top:8px">Tap a slice or a legend row to filter. Filters stack across pies (Region, then Broker...) and show in the bar at the top; Holdings and Closed follow them. Cash and closed profit are never drawn inside the pie.</div></div>' +
-    '<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span class="hint">Include cash and closed profit in totals<br>'+(includeAll?'Cash '+maskable(fmtUsd(T.cash))+' is counted in the headline.':'Headline shows open positions only.')+'</span><button class="btn '+(includeAll?'on':'')+'" onclick="toggleIncludeAll()">'+(includeAll?'On':'Off')+'</button></div>';
+    '<div class="hint" style="margin-top:8px">Tap a slice or a legend row to filter. Filters stack across pies (Region, then Broker...) and show in the bar at the top; Holdings and Closed follow them. Cash and closed profit are never drawn inside the pie.</div></div>';
 }
 
 // ---------- holdings ----------
@@ -1025,18 +1066,19 @@ function renderHoldings(force){
 }
 function signedUsd(v){ return (v>=0?'+':'-')+fmtUsd(Math.abs(v)).replace('-',''); }
 function holdSummaryHtml(rows){
-  const v = rows.reduce(function(s,h){ return s+h._v; },0), day = rows.reduce(function(s,h){ return s+h._day; },0), un = rows.reduce(function(s,h){ return s+h._unreal; },0);
-  const cost = v-un, dayPct = (v-day)>0 ? day/(v-day)*100 : null, unPct = cost>0 ? un/cost*100 : null;
-  const all = rows.reduce(function(s,h){ return s+num(h.realized_gain_base)+num(h.dividends_net_base); },0);
-  let x = xirrFor(rows); const anyLocal = HOLD_F.ticker||HOLD_F.broker||HOLD_F.region||HOLD_F.result;
-  if(x===null && !filterChain.length && !anyLocal && HOME.xirr_pct!=null) x = HOME.xirr_pct;
+  const S = statsFor(rows), A = S.A, loc = S.local && A.vL!=null;
+  const day = rows.reduce(function(s,h){ return s+h._day; },0), v = A.vU, dayPct = (v-day)>0 ? day/(v-day)*100 : null;
+  const dayL = loc ? rows.reduce(function(s,h){ return s+(h._v>0 && h._vL!=null ? h._day*h._vL/h._v : 0); },0) : null;
+  let x = loc ? S.xirrL : S.xirrU; const anyLocal = HOLD_F.ticker||HOLD_F.broker||HOLD_F.region||HOLD_F.result;
+  if(x===null && !loc && !filterChain.length && !anyLocal && HOME.xirr_pct!=null) x = HOME.xirr_pct;
   const cell = function(l, main, sub, c){ return '<div><div class="lbl">'+l+'</div><div class="mv '+(c||'')+'" style="font-size:13px">'+main+'</div><div class="hint">'+(sub||'')+'</div></div>'; };
+  const tot = loc ? S.loc : S.usd, ccy = A.ccy;
   return '<div class="card"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center">' +
-    cell('Value', maskable(fmtUsd(v)), rows.length+' positions') +
-    cell('Today', maskable(signedUsd(day)), dayPct!=null?fmtPct(dayPct,2):'', cls(day)) +
-    cell('Total gain', unPct!=null?fmtPct(unPct,1):'-', maskable(signedUsd(un)), cls(un)) +
-    cell('XIRR', x!=null?fmtPct(x,1):'-', 'per year', cls(x)) + '</div>' +
-    (includeAll && Math.abs(all)>0.5 ? '<div class="hint" style="margin-top:8px;text-align:center">Plus '+maskable(signedUsd(all))+' from sold positions and dividends in these tickers</div>' : '') + '</div>';
+    cell('Value', maskable(loc ? fmtKLocal(A.vL,ccy) : fmtUsd(v)), loc ? maskable(fmtUsd(v)) : rows.length+' positions') +
+    cell('Today', maskable(loc ? signedLocal(dayL,ccy) : signedUsd(day)), dayPct!=null?fmtPct(dayPct,2):'', cls(day)) +
+    cell(includeAll?'Total return':'Price gain', tot.pct!=null?fmtPct(tot.pct,1):'-', maskable(loc ? signedLocal(tot.amt,ccy) : signedUsd(tot.amt)), cls(tot.amt)) +
+    cell('XIRR', x!=null?fmtPct(x,1):'-', loc ? (S.xirrU!=null ? '$ '+fmtPct(S.xirrU,1) : 'per year') : 'per year', cls(x)) + '</div>' +
+    '<div class="hint" style="margin-top:8px;text-align:center">'+(loc?'In '+esc(ccy)+', as your broker shows it. Dollars underneath. ':'')+(includeAll?'Includes dividends and profit from sold positions.':'Price gain on what you hold only.')+(loc && S.fxPts!=null ? '<br>'+fxLine(S) : '')+'</div></div>';
 }
 function renderHoldList(){
   const list = $('hold-list'); if(!list) return;
@@ -1044,16 +1086,18 @@ function renderHoldList(){
   $('hold-summary').innerHTML = holdSummaryHtml(rows);
   list.innerHTML = rows.map(function(h){
     const key = rowKey(h), open = EXPANDED===key;
-    const dayDir = cls(h._dayPct), totDir = cls(h._totPct), stale = h.price_stale_days!=null && h.price_stale_days>10;
-    const dispLocal = h.currency!==baseCcy() ? fmtMoney(num(h.market_value_trade_ccy), h.currency) : '';
+    const R = statsFor([h]), loc = R.local && R.A.vL!=null, ccy = h.currency, tot = loc ? R.loc : R.usd;
+    const dayDir = cls(h._dayPct), totDir = cls(tot.amt), stale = h.price_stale_days!=null && h.price_stale_days>10;
+    const dayAmt = loc ? (h._v>0 && h._vL!=null ? h._day*h._vL/h._v : 0) : h._day;
     const cv = isNum(h.conviction) ? '<span class="cv '+cvClass(Number(h.conviction))+'">'+Number(h.conviction).toFixed(1)+'</span>' : '<span class="cv">-</span>';
     return '<div class="hcard '+(open?'expanded':'')+'" id="hc-'+esc(key)+'"><div class="hrow" onclick="toggleCard(\''+jq(key)+'\')">' +
       '<div class="hl"><div><span class="tk">'+esc(h.asset_id)+'</span><span class="qty">x'+fmtQty(h.quantity)+'</span>'+cv+'</div>' +
       '<div class="nm2">'+esc(h.asset_name||'')+' · '+esc(accountBroker(h.account_id))+'</div>' +
       '<div class="nm2">LTP <b style="color:var(--text)">'+maskable(h._ltp!=null?fmtMoney(h._ltp,h.currency):'-')+'</b>'+(h._live?' <span class="up">●</span>':'')+(stale?' <span class="neg">'+h.price_stale_days+'d stale</span>':'')+'</div></div>' +
-      '<div class="hr"><div class="mv '+(h.is_estimated?'est':'')+'">'+maskable(fmtUsd(h._v))+(h.is_estimated?' *':'')+'</div>'+(dispLocal?'<small>'+maskable(dispLocal)+'</small>':'')+
-      '<small><b class="'+dayDir+'">'+(h._dayPct==null?'-':fmtPct(h._dayPct,2))+'</b> <b class="'+dayDir+'">'+maskable(signedUsd(h._day))+'</b> today</small>' +
-      '<small><b class="'+totDir+'">'+(h._totPct==null?'-':fmtPct(h._totPct,1))+'</b> <b class="'+totDir+'">'+maskable(signedUsd(h._unreal))+'</b> total</small></div></div>' + (open ? cardPanel(h) : '') + '</div>';
+      '<div class="hr"><div class="mv '+(h.is_estimated?'est':'')+'">'+maskable(loc ? fmtMoney(R.A.vL,ccy) : fmtUsd(h._v))+(h.is_estimated?' *':'')+'</div>'+(loc?'<small>'+maskable(fmtUsd(h._v))+'</small>':'')+
+      '<small><b class="'+dayDir+'">'+(h._dayPct==null?'-':fmtPct(h._dayPct,2))+'</b> <b class="'+dayDir+'">'+maskable(loc ? signedLocal(dayAmt,ccy) : signedUsd(dayAmt))+'</b> today</small>' +
+      '<small><b class="'+totDir+'">'+(tot.pct==null?'-':fmtPct(tot.pct,1))+'</b> <b class="'+totDir+'">'+maskable(loc ? signedLocal(tot.amt,ccy) : signedUsd(tot.amt))+'</b> total</small>' +
+      (loc && R.fxPts!=null ? '<small>'+fxLine(R)+'</small>' : '')+'</div></div>' + (open ? cardPanel(h) : '') + '</div>';
   }).join('') || '<p class="hint">No positions match the current filters.</p>';
   if(EXPANDED) loadConviction(EXPANDED.split('::')[1]);
 }
@@ -1070,13 +1114,33 @@ function txnRowsHtml(list){
   return '<div class="lot-row head"><span>Date</span><span>Action</span><span>Qty</span><span>Price</span><span style="text-align:right">Base amt</span></div>'+(rows||'<p class="hint">No transactions found.</p>');
 }
 function positionTxns(h){ return TXNS ? TXNS.filter(function(t){ return t.asset_id===h.asset_id && t.account_id===h.account_id; }) : null; }
+function returnsTable(h){
+  const A = aggParts([h]), R = deriveStats(A), P = A.parts[0], loc = R.local && A.vL!=null, c = h.currency;
+  const L = function(v){ return maskable(fmtMoney(v,c)); }, U = function(v){ return maskable(fmtUsd(v)); };
+  const sg = function(v, f){ return '<span class="'+cls(v)+'">'+maskable(f(v))+'</span>'; };
+  const usdOf = function(onVal, locVal){ return (loc && !SHOW_FX && locVal!=null) ? locVal*P.k : onVal; };
+  const row = function(label, l, u, bold){ return '<div class="rt'+(bold?' b':'')+(loc?'':' one')+'"><span class="k">'+label+'</span>'+(loc?'<span>'+l+'</span>':'')+'<span>'+u+'</span></div>'; };
+  const tl = R.loc, tu = R.usd;
+  const rows = [
+    row('Value', L(P.vL), U(P.vU)),
+    row('Cost (with fees)', L(P.cL), U(P.cU)),
+    row('Price gain', loc?sg(P.unL,function(v){ return signedLocal(v,c); }):'', sg(usdOf(P.unU,P.unL),signedUsd)),
+    row('Dividends', loc?sg(P.divL,function(v){ return signedLocal(v,c); }):'', sg(usdOf(P.divU,P.divL),signedUsd)),
+    row('Sold profit', loc?sg(P.realL,function(v){ return signedLocal(v,c); }):'', sg(usdOf(P.realU,P.realL),signedUsd)),
+    row(includeAll?'Total return':'Price gain only', loc?'<b class="'+cls(tl.amt)+'">'+(tl.pct!=null?fmtPct(tl.pct,1):'-')+'</b>':'', '<b class="'+cls(tu.amt)+'">'+(tu.pct!=null?fmtPct(tu.pct,1):'-')+'</b>', true),
+    row('XIRR / yr', loc?(R.xirrL!=null?fmtPct(R.xirrL,1):'-'):'', R.xirrU!=null?fmtPct(R.xirrU,1):'-')
+  ].join('');
+  const avg = avgPriceExFees(h);
+  return '<div class="sub-h">Returns'+(A.ready?'':' (loading ledger...)')+'</div><div class="rt head"><span class="k"></span>'+(loc?'<span>'+esc(c)+'</span>':'')+'<span>USD'+(loc&&!SHOW_FX?' (rate fixed)':'')+'</span></div>'+rows +
+    '<div class="hint" style="margin-top:6px">'+(avg!=null?'Average price before fees '+maskable(fmtMoney(avg,c))+' (as your broker shows it). ':'')+(loc && R.fxPts!=null ? fxLine(R) + '. ' : '')+'XIRR is approximate and before fees.</div>';
+}
 function cardPanel(h){
   const key = rowKey(h), tn = positionTxns(h);
   const lots = LOTS ? LOTS.filter(function(l){ return l.account_id===h.account_id && l.asset_id===h.asset_id; }) : null;
   const ltp = h.latest_price_trade_ccy!=null ? fmtMoney(h.latest_price_trade_ccy, h.currency) : '-';
-  let p = '<div class="panel" onclick="event.stopPropagation()"><div class="meta-line">LTP '+maskable(ltp)+' · Avg cost '+(h.avg_cost_per_unit!=null?Number(h.avg_cost_per_unit).toFixed(4):'-')+' '+esc(h.currency)+
-    ' · Invested '+maskable(h.cost_basis_trade_ccy!=null?fmtMoney(h.cost_basis_trade_ccy,h.currency):'-')+'<br>XIRR '+(function(){ const x=xirrFor([h]); return x!=null?'<b class="'+cls(x)+'">'+fmtPct(x,1)+'/yr</b> (approx., before fees)':'-'; })()+'<br>Realized '+maskable(fmtUsd(h.realized_gain_base))+' · Dividends '+maskable(fmtUsd(h.dividends_net_base))+' · Fees paid '+maskable(fmtUsd(h.total_fees_paid_base))+
+  let p = '<div class="panel" onclick="event.stopPropagation()"><div class="meta-line">LTP '+maskable(ltp)+' · Invested '+maskable(h.cost_basis_trade_ccy!=null?fmtMoney(h.cost_basis_trade_ccy,h.currency):'-')+' · Fees paid '+maskable(fmtUsd(h.total_fees_paid_base))+
     (h.is_estimated?'<br><span style="color:var(--orange)">* At cost - no real price has been fetched for this ticker.</span>':'')+(h.priced_from_ledger?'<br><span style="color:var(--orange)">Price taken from your last trade (no market price source).</span>':'')+'</div>';
+  p += returnsTable(h);
   p += '<div class="frow owner-only"><button class="btn" onclick="openTxnModal(\'BUY\',{account_id:\''+jq(h.account_id)+'\',asset_id:\''+jq(h.asset_id)+'\'})">Buy more</button><button class="btn" onclick="openTxnModal(\'SELL\',{account_id:\''+jq(h.account_id)+'\',asset_id:\''+jq(h.asset_id)+'\'})">Sell</button><button class="btn" onclick="openTxnModal(\'DIVIDEND\',{account_id:\''+jq(h.account_id)+'\',asset_id:\''+jq(h.asset_id)+'\'})">Dividend</button></div>';
   if(h.manual_override) p += '<div class="frow owner-only"><input class="f" type="number" step="any" id="mp-'+esc(key)+'" placeholder="Set price ('+esc(h.currency)+')"><button class="btn" onclick="saveManualPrice(\''+jq(key)+'\')">Save price</button><button class="btn" onclick="resumeAuto(\''+jq(key)+'\')">Resume auto-fetch</button></div>';
   p += '<div class="sub-h">Conviction</div><div class="cvedit owner-only"><input class="f" type="number" min="1" max="10" step="0.5" id="cvv-'+esc(h.asset_id)+'" value="'+(isNum(h.conviction)?Number(h.conviction):'')+'" style="width:64px" placeholder="1-10"><input class="f" id="cvn-'+esc(h.asset_id)+'" placeholder="Why the change? (optional)" style="flex:1;min-width:120px"><button class="btn" onclick="saveConviction(\''+jq(h.asset_id)+'\')">Save</button></div><div id="cvbox-'+esc(h.asset_id)+'"><p class="hint">Loading history...</p></div>';
@@ -1301,6 +1365,122 @@ document.addEventListener('keydown', function(e){
   const b = Array.prototype.find.call(box.querySelectorAll('button'), function(x){ return /save|submit|add/i.test(x.getAttribute('onclick')||'') && !x.disabled; });
   if(b){ e.preventDefault(); b.click(); }
 });
+// ---------- local-currency view: figures in the holding's own currency (matches the broker), dollars underneath ----------
+// Two switches, remembered on this device:
+//   includeAll  = cash, dividends and sold-position profit count in totals and returns
+//   SHOW_FX     = dollar gains include the currency effect (real dollar outcome); off = dollar gains as if the rate had not moved
+let SHOW_FX = true;
+try{
+  const a = localStorage.getItem('pf_fx'); if(a!==null) SHOW_FX = a==='1';
+  const b = localStorage.getItem('pf_inc'); if(b!==null) includeAll = b==='1';
+}catch(e){ /* storage may be blocked */ }
+function toggleFx(){ SHOW_FX = !SHOW_FX; try{ localStorage.setItem('pf_fx', SHOW_FX?'1':'0'); }catch(e){} renderAll(); }
+function toggleIncludeAll(){ includeAll = !includeAll; try{ localStorage.setItem('pf_inc', includeAll?'1':'0'); }catch(e){} renderAll(); }
+function renderSetBar(){
+  const el = $('setbar'); if(!el) return;
+  el.innerHTML = '<button class="pill '+(includeAll?'on':'')+'" onclick="toggleIncludeAll()" title="Cash, dividends and profit from sold positions count in totals and returns"><span class="tick">'+(includeAll?'✓':'')+'</span>Cash, dividends &amp; sold profit</button>' +
+    '<button class="pill '+(SHOW_FX?'on':'')+'" onclick="toggleFx()" title="Dollar gains include the currency effect. Off: dollar gains as if the exchange rate had not moved"><span class="tick">'+(SHOW_FX?'✓':'')+'</span>Currency effect</button>';
+}
+
+// ---- ledger pieces for one position ----
+function txnLocalAmt(t){ const g = Number(t.gross_amount); if(t.gross_amount!==undefined && t.gross_amount!==null && t.gross_amount!=='' && isFinite(g) && g>0) return g; return Math.abs(num(t.quantity)*num(t.price)); }
+function txnFxRate(t){ const f = Number(t.fx_rate_to_base); if(f>0) return f; const g = txnLocalAmt(t), b = Math.abs(num(t.base_currency_amount)); return (g>0 && b>0) ? g/b : 1; }
+function txnTime(t){ const d = new Date(String(t.date).slice(0,10)+'T00:00:00').getTime(); return d; }
+
+// raw components for one holding row (a position, open or closed)
+function posParts(h){
+  const base = baseCcy(), local = !!h.currency && h.currency!==base, tn = TXNS ? positionTxns(h) : null;
+  const P = {local:local, ccy:h.currency, ready:!!tn, vU:num(h._v), unU:num(h._unreal), cU:num(h._v)-num(h._unreal),
+    divU:num(h.dividends_net_base), realU:num(h.realized_gain_base), boughtU:0, boughtL:0, divL:0,
+    vL: local ? (h._vL!=null ? num(h._vL) : null) : num(h._v), cL: local ? num(h.cost_basis_trade_ccy) : (num(h._v)-num(h._unreal)),
+    flowsL:[], flowsU:[]};
+  if(num(h.quantity) <= 1e-9){ P.vU = 0; P.unU = 0; P.cU = 0; P.vL = 0; P.cL = 0; }
+  if(!local){ P.vL = P.vU; P.cL = P.cU; P.divL = P.divU; P.realL = P.realU; }
+  if(tn){
+    tn.forEach(function(t){
+      const d = txnTime(t); if(isNaN(d)) return;
+      const gl = txnLocalAmt(t), fx = txnFxRate(t), fees = num(t.fees), bu = Math.abs(num(t.base_currency_amount));
+      if(t.action==='BUY'){ P.boughtL += gl+fees; P.boughtU += bu+fees/fx; P.flowsL.push({d:d,a:-gl}); P.flowsU.push({d:d,a:-bu}); }
+      else if(t.action==='SELL'){ P.flowsL.push({d:d,a:gl}); P.flowsU.push({d:d,a:bu}); }
+      else if(t.action==='DIVIDEND'){ P.divL += gl-fees; P.flowsL.push({d:d,a:gl-fees,div:1}); P.flowsU.push({d:d,a:bu-fees/fx,div:1}); }
+    });
+  }
+  if(local){
+    P.realL = isNum(h.realized_gain_trade_ccy) ? num(h.realized_gain_trade_ccy) : (P.boughtU>0 && P.boughtL>0 ? P.realU/(P.boughtU/P.boughtL) : 0);
+    if(!P.divL && P.divU && P.boughtU>0 && P.boughtL>0) P.divL = P.divU*(P.boughtL/P.boughtU);
+  }
+  if(!(P.boughtU>0)) P.boughtU = Math.max(P.cU,0);          // no buys found in the ledger: fall back to what is held
+  if(!(P.boughtL>0)) P.boughtL = Math.max(P.cL||0,0);
+  P.unL = (P.vL!=null) ? P.vL - P.cL : null;
+  P.k = (P.boughtL>0) ? P.boughtU/P.boughtL : 1;           // dollars per local unit at the average purchase rate
+  return P;
+}
+// combine positions: totals add up; local only if every position is in the same non-base currency
+function aggParts(rows){
+  const parts = rows.map(posParts);
+  const ccys = {}; parts.forEach(function(p){ ccys[p.ccy||'?']=1; });
+  const keys = Object.keys(ccys), single = keys.length===1 && parts.length>0 && parts[0].local;
+  const A = {n:parts.length, local:single, ccy: single?keys[0]:baseCcy(), ready:parts.every(function(p){ return p.ready; }), parts:parts};
+  const sum = function(f){ return parts.reduce(function(s,p){ return s+(f(p)||0); },0); };
+  A.vU = sum(function(p){ return p.vU; }); A.unU = sum(function(p){ return p.unU; }); A.cU = sum(function(p){ return p.cU; });
+  A.divU = sum(function(p){ return p.divU; }); A.realU = sum(function(p){ return p.realU; }); A.boughtU = sum(function(p){ return p.boughtU; });
+  if(single){ A.vL = sum(function(p){ return p.vL; }); A.cL = sum(function(p){ return p.cL; }); A.unL = sum(function(p){ return p.unL; }); A.divL = sum(function(p){ return p.divL; }); A.realL = sum(function(p){ return p.realL; }); A.boughtL = sum(function(p){ return p.boughtL; }); }
+  return A;
+}
+// measure = gain amount and return % on the right base, under the two switches
+function measureOf(num_, cur, bought){ const den = includeAll ? bought : cur; return {amt:num_, pct: den>0 ? num_/den*100 : null}; }
+function deriveStats(A){
+  const R = {A:A, local:A.local, ccy:A.ccy};
+  const gainL = function(p){ return p.unL + (includeAll ? p.divL + p.realL : 0); };
+  const gainUon = function(p){ return p.unU + (includeAll ? p.divU + p.realU : 0); };
+  // dollars: per position, with or without the currency effect
+  let amtU = 0, den = 0, amtUon = 0;
+  A.parts.forEach(function(p){
+    const on = gainUon(p); amtUon += on;
+    if(p.local && !SHOW_FX && p.unL!=null) amtU += gainL(p)*p.k; else amtU += on;
+    den += includeAll ? p.boughtU : Math.max(p.cU,0);
+  });
+  R.usd = {amt:amtU, pct: den>0 ? amtU/den*100 : null, amtOn:amtUon, pctOn: den>0 ? amtUon/den*100 : null};
+  if(A.local && A.vL!=null){
+    const g = A.parts.reduce(function(s,p){ return s+gainL(p); },0), dl = includeAll ? A.boughtL : A.cL;
+    R.loc = {amt:g, pct: dl>0 ? g/dl*100 : null};
+    R.fxPts = (R.usd.pctOn!=null && R.loc.pct!=null) ? R.usd.pctOn - R.loc.pct : null;
+  }
+  // XIRR
+  const mk = function(which, convert){
+    const fl = [];
+    A.parts.forEach(function(p){
+      (which==='L'?p.flowsL:p.flowsU).forEach(function(f){ if(f.div && !includeAll) return; fl.push({d:f.d, a: f.a*(convert?p.k:1)}); });
+      const term = which==='L' ? p.vL : p.vU; if(term>0) fl.push({d:Date.now(), a: term*(convert?p.k:1)});
+    });
+    return xirrSolve(fl);
+  };
+  R.xirrU = (A.parts.some(function(p){ return p.local; }) && !SHOW_FX) ? mk('L', true) : mk('U', false);
+  if(A.local) R.xirrL = mk('L', false);
+  return R;
+}
+function statsFor(rows){ return deriveStats(aggParts(rows)); }
+
+// ---- formatting helpers ----
+function ccySym(c){ return c==='INR'?'₹':c==='AED'?'AED ':c==='USD'?'$':(c?c+' ':''); }
+function fmtKLocal(v, ccy){
+  if(v===null||v===undefined||!isFinite(v)) return '-';
+  const a=Math.abs(v), s=v<0?'-':'', sym=ccySym(ccy);
+  if(ccy==='INR') return s+sym+(a>=1e7?(a/1e7).toFixed(2)+'Cr':a>=1e5?(a/1e5).toFixed(2)+'L':a>=1000?(a/1000).toFixed(1)+'k':Math.round(a));
+  return s+sym+(a>=1e6?(a/1e6).toFixed(2)+'M':a>=1000?(a/1000).toFixed(1)+'k':Math.round(a));
+}
+function signedLocal(v, ccy){ if(v===null||v===undefined||!isFinite(v)) return '-'; return (v>=0?'+':'-')+fmtMoney(Math.abs(v), ccy).replace('-',''); }
+function fxLine(R){
+  if(!R.local || R.fxPts==null) return '';
+  const o = SHOW_FX ? '' : ' (rate held fixed)';
+  return 'In $: <b class="'+cls(R.usd.pct)+'">'+(R.usd.pct!=null?fmtPct(R.usd.pct,1):'-')+'</b>'+(SHOW_FX ? ' · currency <b class="'+cls(R.fxPts)+'">'+(R.fxPts>=0?'+':'')+R.fxPts.toFixed(1)+' pts</b>' : o);
+}
+// average price per share before fees (what a broker shows), from the open lots
+function avgPriceExFees(h){
+  if(!LOTS) return null; const ls = LOTS.filter(function(l){ return l.account_id===h.account_id && l.asset_id===h.asset_id; });
+  const q = ls.reduce(function(s,l){ return s+num(l.qty); },0); if(!(q>0)) return null;
+  return ls.reduce(function(s,l){ return s+num(l.qty)*num(l.cost_per_unit); },0)/q;
+}
 // ---------- Add Transaction / Watchlist modal ----------
 // Typing never rebuilds the form (only the small hint / preview areas), so the keyboard stays open.
 // Failure keeps the form open with everything typed; success closes it and says exactly what was recorded.
