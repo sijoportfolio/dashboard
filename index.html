@@ -43,7 +43,6 @@ button{transition:transform .08s,filter .08s}
 .busy::after{content:'';display:inline-block;width:10px;height:10px;margin-left:6px;vertical-align:-1px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:btnspin .7s linear infinite}
 .ib.busy::after,.fab-main.busy::after,.alert-close.busy::after{position:absolute;left:50%;top:50%;margin:-8px 0 0 -8px;width:14px;height:14px;vertical-align:baseline}
 .ib.busy,.fab-main.busy{color:transparent}
-.ib.main.busy{color:transparent}
 .done-flash{animation:doneFlash .9s ease-out}
 @keyframes doneFlash{0%{background:rgba(53,196,140,.45)}100%{background:transparent}}
 /* landscape / wide screens */
@@ -62,29 +61,29 @@ button{transition:transform .08s,filter .08s}
 .ttl{font-size:10px;letter-spacing:.12em;color:var(--text-faint);display:flex;align-items:center;gap:6px;min-width:0;flex:1;overflow:hidden}.ttl>span:first-child{flex:none}#status-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--gray);flex:none}.dot.live{background:var(--green)}.dot.stale{background:var(--orange)}
 .ico{display:flex;gap:7px;flex:none}
-.ib{position:relative;background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:8px;width:32px;height:30px;font-size:13px;cursor:pointer}
-.ib.main{width:38px;height:34px;font-size:17px;color:#08131F;background:var(--gold);border-color:var(--gold-bright);font-weight:700;box-shadow:0 0 0 0 rgba(223,193,90,.6);animation:idleGlow 3s ease-in-out infinite}
-.ib.main.busy{animation:none;opacity:.85}.ib.main.busy::after{border-color:#08131F;border-right-color:transparent}
-@keyframes idleGlow{0%,100%{box-shadow:0 0 0 0 rgba(223,193,90,0)}50%{box-shadow:0 0 0 5px rgba(223,193,90,.22)}}
-.ib.dimmed{opacity:.3}.ib .b{position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;border-radius:8px;font-size:8px;padding:1px 4px}
+.ib{position:relative;background:rgba(201,162,39,.12);border:1px solid var(--gold);color:var(--gold-bright);border-radius:9px;width:38px;height:34px;font-size:16px;line-height:1;cursor:pointer;box-shadow:0 0 0 1px rgba(201,162,39,.22),0 0 9px rgba(201,162,39,.22)}
+.ib.dimmed{opacity:.6}.ib .b{position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border-radius:8px;font-size:8px;padding:1px 4px}
 .ib.warn .b{background:var(--orange)}
-#refresh-btn{width:38px;height:34px;font-size:18px;line-height:1;color:var(--gold-bright);border-color:var(--gold);background:rgba(201,162,39,.16);box-shadow:0 0 0 1px rgba(201,162,39,.25),0 0 10px rgba(201,162,39,.25)}
-#refresh-btn .rot{display:inline-block}
+#refresh-btn .rot{display:inline-block;font-size:18px}
 #refresh-btn.busy{color:var(--gold-bright);opacity:1}#refresh-btn.busy::after{display:none}#refresh-btn.busy .rot{animation:btnspin .8s linear infinite}
 /* journey */
 .big{font-family:var(--serif);font-size:24px;font-weight:600;margin:3px 0}
 .jsub{font-size:10px;color:var(--text-dim);line-height:1.6}
-.track-wrap{position:relative;height:34px;margin:12px 0 4px}
-.track{position:absolute;top:14px;left:0;right:0;height:6px;background:var(--border);border-radius:3px}
+.track-wrap{position:relative;height:60px;margin:10px 0 4px}
+.track{position:absolute;top:34px;left:0;right:0;height:6px;background:var(--border);border-radius:3px}
 .track-fill{position:absolute;top:0;left:0;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--blue),#7BB3F5)}
-.milestone{position:absolute;top:12px;width:9px;height:9px;border-radius:50%;background:var(--bg);border:2px solid var(--border);transform:translateX(-50%)}
-.milestone.passed{border-color:var(--gold);background:var(--gold)}
-.mlabel{position:absolute;top:25px;font-size:8px;color:var(--text-faint);transform:translateX(-50%);white-space:nowrap}
-.runner{position:absolute;top:-1px;width:18px;height:18px;border-radius:50%;background:var(--blue);border:3px solid var(--bg);box-shadow:0 0 0 2px var(--blue),0 0 10px rgba(79,143,232,.5);transform:translateX(-50%)}
-.finish{position:absolute;top:8px;right:-3px;width:9px;height:16px;background:repeating-conic-gradient(var(--text) 0 25%,var(--bg) 0 50%) 0 0/6px 6px;border-radius:1px;box-shadow:0 0 0 1px var(--border)}
+.pole{position:absolute;top:8px;width:2px;height:29px;background:var(--text-faint);transform:translateX(-1px);border-radius:1px}
+.pole::before{content:'';position:absolute;top:0;left:2px;width:0;height:0;border-top:6px solid transparent;border-bottom:6px solid transparent;border-left:15px solid var(--border)}
+.pole.passed{background:var(--gold)}.pole.passed::before{border-left-color:var(--gold);animation:wave 1.8s ease-in-out infinite;transform-origin:left center}
+@keyframes wave{0%,100%{transform:skewY(0)}50%{transform:skewY(-9deg)}}
+.pole.goal::before{border:0;width:16px;height:12px;background:repeating-conic-gradient(var(--text) 0 25%,var(--bg) 0 50%) 0 0/6px 6px;box-shadow:0 0 0 1px var(--border)}
+.pole.goal{background:var(--text)}
+.mlabel{position:absolute;top:44px;font-size:8px;line-height:1.25;text-align:center;color:var(--text-faint);transform:translateX(-50%);white-space:nowrap}
+.mlabel b{display:block;font-weight:500;color:var(--text-dim)}.mlabel.last{transform:translateX(-85%)}
+.runner{position:absolute;top:28px;width:18px;height:18px;border-radius:50%;background:var(--blue);border:3px solid var(--bg);box-shadow:0 0 0 2px var(--blue),0 0 10px rgba(79,143,232,.5);transform:translateX(-50%)}
 .jgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border-soft)}
 .jg{font-size:10px;color:var(--text-dim);display:flex;justify-content:space-between;gap:6px}.jg .k{color:var(--text-faint)}
-.jtoggle{background:none;border:0;color:var(--text-faint);font-size:10px;cursor:pointer;padding:6px 0 0;text-decoration:underline}
+.jtoggle{background:none;border:0;color:var(--text-faint);font-size:10px;cursor:pointer;padding:8px 14px 0 0;text-decoration:underline}
 .eta-strip{display:flex;justify-content:space-between;margin-top:12px;padding-top:11px;border-top:1px solid var(--border)}
 .eta-block{text-align:center;flex:1}.eta-eyebrow{font-size:7.5px;letter-spacing:.1em;color:var(--text-faint);margin-bottom:3px}
 .eta-value{font-family:var(--serif);font-size:15px}.eta-value.target{color:var(--gold-bright)}
@@ -95,6 +94,14 @@ button{transition:transform .08s,filter .08s}
 @keyframes ff{0%{opacity:0}15%{opacity:1}100%{opacity:0}}
 .fs-confetti{position:absolute;top:-20px;width:7px;height:13px;border-radius:1px;opacity:0;animation-name:fcf;animation-timing-function:ease-in;animation-fill-mode:forwards}
 @keyframes fcf{0%{opacity:0;transform:translateY(0) rotate(0)}8%{opacity:1}100%{opacity:0;transform:translateY(100vh) rotate(360deg)}}
+#celeb{position:fixed;inset:0;z-index:9999;display:none;background:rgba(0,0,0,.55);cursor:pointer}
+#celeb.on{display:block;animation:celebin .4s ease-out}
+@keyframes celebin{from{opacity:0}to{opacity:1}}
+#celeb canvas{position:absolute;inset:0;width:100%;height:100%}
+#celeb .cmsg{position:absolute;left:0;right:0;top:38%;text-align:center;font-family:var(--serif);font-size:34px;color:var(--gold-bright);text-shadow:0 2px 20px rgba(201,162,39,.7);animation:cmsg 1s ease-out both}
+#celeb .csub{position:absolute;left:0;right:0;top:calc(38% + 48px);text-align:center;font-size:11px;letter-spacing:.14em;color:var(--text-dim)}
+@keyframes cmsg{0%{opacity:0;transform:scale(.6)}60%{opacity:1;transform:scale(1.08)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){#celeb,.pole.passed::before{animation:none}}
 /* mini stats */
 .mini{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
 .mini .card{margin:0;padding:8px 5px;text-align:center;cursor:default}
@@ -223,6 +230,7 @@ details.txn-extra summary{font-size:10px;color:var(--gold-bright);cursor:pointer
   <button class="lock-submit" onclick="submitAccessKey()">Unlock</button><div class="lock-error" id="lock-error"></div>
 </div></div>
 
+<div id="celeb" onclick="stopCelebration()"><canvas id="celeb-cv"></canvas><div class="cmsg" id="celeb-msg"></div><div class="csub" id="celeb-sub"></div></div>
 <div class="wrap" id="main-wrap" style="display:none">
   <div class="top">
     <span class="ttl"><span>SIJO PORTFOLIO</span><span class="dot" id="status-dot"></span><span class="hint" id="status-txt">loading</span></span>
@@ -230,7 +238,7 @@ details.txn-extra summary{font-size:10px;color:var(--gold-bright);cursor:pointer
       <button class="ib dimmed warn" id="dq-btn" onclick="sh('dq')" title="Data quality">&#9888;<span class="b" id="dq-badge" style="display:none"></span></button>
       <button class="ib dimmed" id="inb-btn" onclick="sh('inb')" title="Inbox">&#128276;<span class="b" id="inb-badge" style="display:none"></span></button>
       <button class="ib" id="hide-btn" onclick="toggleValues()" title="Hide values">&#128065;</button>
-      <button class="ib main owner-only" id="refresh-btn" onclick="refreshPrices()" title="Fetch fresh prices">&#8635;</button>
+      <button class="ib owner-only" id="refresh-btn" onclick="refreshPrices()" title="Fetch fresh prices"><span class="rot">&#8635;</span></button>
     </span>
   </div>
   <div id="journey"></div>
@@ -273,9 +281,9 @@ let ACCOUNTS = [], TARGETS = [], CONFIG = {};
 let LOTS = null, CLOSED = null, RETURNS = null, TXNS = null, WATCHLIST = null;
 let LIVE = null, LIVE_AT = 0;
 let filterChain = [], valuesHidden = false, includeAll = true;   // includeAll: cash + closed profit in totals
-let ACTIVE_TAB = 'over', OVER_DIM = 'region', ALLOC_DIM = 'region', METRIC = 'perf', PERIOD = 'ITD', JOURNEY_OPEN = false;
+let ACTIVE_TAB = 'over', OVER_DIM = 'region', ALLOC_DIM = 'region', METRIC = 'perf', PERIOD = 'ITD', JOURNEY_OPEN = false, JOURNEY_EXPLAIN = false;
 let HOLD_SORT = 'positionSize', EXPANDED = null, POOL_OPEN = false;
-let ACCESS_KEY = '', ACCESS_LEVEL = null;
+let ACCESS_KEY = '', ACCESS_LEVEL = null, LOGIN_EVENT = false;
 try { ACCESS_KEY = sessionStorage.getItem('portfolio_access_key') || ''; } catch (e) { ACCESS_KEY = ''; }
 
 // ---------- small helpers ----------
@@ -522,7 +530,7 @@ async function initGate(){
 async function submitAccessKey(){
   const input=$('lock-key-input'), errEl=$('lock-error'), key=input.value.trim(); if(!key) return;
   ACCESS_KEY = key;
-  try{ await loadData('config'); try{ sessionStorage.setItem('portfolio_access_key', key); }catch(e){} errEl.textContent=''; afterUnlock(); }
+  try{ await loadData('config'); LOGIN_EVENT = true; try{ sessionStorage.setItem('portfolio_access_key', key); }catch(e){} errEl.textContent=''; afterUnlock(); }
   catch(err){ ACCESS_KEY=''; errEl.textContent='Incorrect key - try again.'; }
 }
 $('lock-key-input').addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); submitAccessKey(); } });
@@ -621,7 +629,6 @@ async function unackWarning(key){
 }
 
 // ---------- journey ----------
-let CELEBRATED = false;
 function milestoneVisual(realPct, pcts){
   const stops = [{r:0,v:0}].concat(pcts.map(function(p,i){ return {r:p, v:(i+1)/pcts.length*100}; }));
   const c = Math.max(0, Math.min(100, realPct));
@@ -640,22 +647,33 @@ function renderJourney(){
   const ms = (HOME.milestones || []).slice().sort(function(a,b){ return a.pct-b.pct; });
   const pcts = ms.map(function(m){ return m.pct; });
   const vis = milestoneVisual(pct, pcts.length ? pcts : [100]);
-  const near = ms.some(function(m){ return Math.abs(T.value - m.amount) <= 2000; });
+  const nearMs = ms.filter(function(m){ return Math.abs(T.value - m.amount) <= 2000; }).sort(function(x,y){ return Math.abs(T.value-x.amount)-Math.abs(T.value-y.amount); })[0] || null;
   const colors = ['var(--gold-bright)','var(--blue)','var(--green)','var(--rose)'];
-  const burst = near ? colors.map(function(c,i){ const a=(i/colors.length)*2*Math.PI+0.4; return '<div class="celebrate-burst" style="background:'+c+';--dx:'+Math.round(Math.cos(a)*20)+'px;--dy:'+Math.round(Math.sin(a)*20-14)+'px;animation-delay:'+(i*0.12)+'s"></div>'; }).join('') : '';
-  if(near && !CELEBRATED){ CELEBRATED = true; celebrate(); }
+  const burst = nearMs ? colors.map(function(c,i){ const a=(i/colors.length)*2*Math.PI+0.4; return '<div class="celebrate-burst" style="background:'+c+';--dx:'+Math.round(Math.cos(a)*20)+'px;--dy:'+Math.round(Math.sin(a)*20-14)+'px;animation-delay:'+(i*0.12)+'s"></div>'; }).join('') : '';
+  // celebrate only at login (the key was just typed), once, when within $2,000 of a milestone flag
+  if(LOGIN_EVENT){ LOGIN_EVENT = false; if(nearMs) setTimeout(function(){ celebrate(nearMs.pct >= 100 ? 'goal' : 'milestone'); }, 500); }
+  const lastIdx = ms.length-1;
   const track = '<div class="track-wrap"><div class="track"><div class="track-fill" style="width:'+vis+'%"></div></div>' +
-    ms.map(function(m,i){ const l = milestoneVisual(m.pct, pcts); return '<div class="milestone '+(T.value>=m.amount?'passed':'')+'" style="left:'+l+'%"></div><div class="mlabel" style="left:'+l+'%">'+m.pct+'%</div>'; }).join('') +
-    '<div class="finish"></div><div class="runner" style="left:'+Math.max(2,Math.min(98,vis))+'%">'+burst+'</div></div>';
+    ms.map(function(m,i){ const l = milestoneVisual(m.pct, pcts), last = i===lastIdx, goal = m.pct>=100;
+      return '<div class="pole '+(T.value>=m.amount?'passed ':'')+(goal?'goal':'')+'" style="left:'+l+'%"></div><div class="mlabel '+(last?'last':'')+'" style="left:'+l+'%"><b>'+m.pct+'%</b>'+maskable(fmtK(m.amount))+'</div>'; }).join('') +
+    '<div class="runner" style="left:'+Math.max(2,Math.min(98,vis))+'%">'+burst+'</div></div>';
   const rate = J.rate_used_pct;
   const gridRows = [
     ['Plan says today', J.plan_value_today!=null ? maskable(fmtUsd(J.plan_value_today)) : '-'],
     ['Today\'s gain', '<span class="'+cls(T.day)+'">'+maskable((T.day>=0?'+':'-')+fmtUsd(Math.abs(T.day)))+'</span>'],
     ['Money in vs plan', J.gap_from_contributions!=null ? (J.gap_from_contributions<=0 ? '<span class="pos">'+maskable(fmtK(-J.gap_from_contributions))+' ahead</span>' : '<span class="neg">'+maskable(fmtK(J.gap_from_contributions))+' behind</span>') : '-'],
     ['Returns vs plan', J.gap_from_returns!=null ? (J.gap_from_returns<=0 ? '<span class="pos">'+maskable(fmtK(-J.gap_from_returns))+' ahead</span>' : '<span class="neg">'+maskable(fmtK(J.gap_from_returns))+' behind</span>') : '-'],
+    ['Returns, deposit timing removed', J.gap_fair_returns!=null ? (J.gap_fair_returns<=0 ? '<span class="pos">'+maskable(fmtK(-J.gap_fair_returns))+' ahead</span>' : '<span class="neg">'+maskable(fmtK(J.gap_fair_returns))+' behind</span>') : '-'],
     ['Last 3 months / mo', maskable(fmtUsd(J.pace_3m_monthly))+' vs '+maskable(fmtUsd(J.monthly_plan))],
     ['Return needed / yr', J.required_return_pct!=null ? J.required_return_pct.toFixed(1)+'%' : '-']
   ];
+  const mi = J.net_money_in!=null ? J.net_money_in : T.moneyIn, pg = (J.plan_value_today!=null && J.plan_contrib_today!=null) ? J.plan_value_today - J.plan_contrib_today : null, ag = T.value - mi;
+  const ex = function(a,b){ return '<div class="jg"><span class="k">'+a+'</span><span>'+b+'</span></div>'; };
+  const explain = JOURNEY_EXPLAIN ? '<div class="card" style="margin:8px 0 0;background:var(--surface-2)"><div class="hint" style="line-height:1.6;margin-bottom:6px">The <b>plan</b> starts at zero on the first date in your targets tab, adds each month\'s planned deposit and grows it at '+J.target_cagr+'% a year. Everything below compares you with that path, as at the last build.</div><div class="jgrid" style="border:0;margin:0;padding:0">' +
+    ex('Plan: deposits so far', maskable(fmtUsd(J.plan_contrib_today))) + ex('You: money in', maskable(fmtUsd(mi))) +
+    ex('Plan: growth so far', pg!=null?maskable(fmtUsd(pg)):'-') + ex('You: gain so far', maskable(fmtUsd(ag))) +
+    ex('Plan value today', maskable(fmtUsd(J.plan_value_today))) + ex('Your value today', maskable(fmtUsd(T.value))) + '</div>' +
+    '<div class="hint" style="line-height:1.6;margin-top:8px"><b>Money in vs plan</b> = plan deposits minus your money in. <b>Returns vs plan</b> = the rest of the gap: the growth the plan expected minus the gain you actually have. <b>Deposit timing removed</b> = what your own deposits, on the dates they really went in, would be worth at '+J.target_cagr+'% a year, minus what you have, so late or early deposits do not count against your investing.</div></div>' : '';
   const more = JOURNEY_OPEN ? '<div class="jgrid">'+[
     ['At '+(rate!=null?rate.toFixed(1):'-')+'% (your XIRR)', maskable(fmtK(J.projected_at_current_rate))],
     ['At target '+J.target_cagr+'%', maskable(fmtK(J.projected_at_target_rate))],
@@ -666,16 +684,40 @@ function renderJourney(){
   ].map(function(r){ return '<div class="jg"><span class="k">'+r[0]+'</span><span>'+r[1]+'</span></div>'; }).join('')+'</div>' : '';
   $('journey').innerHTML = '<div class="card"><div class="lbl">Journey to '+maskable(fmtUsd(J.goal_amount))+' · '+fmtMonthYear(J.target_date)+'</div>' +
     '<div class="big">'+maskable(fmtUsd(T.value))+' <span class="jsub">'+pct.toFixed(1)+'% of goal · '+aheadTxt+'</span></div>' + track +
-    '<div class="jgrid">'+gridRows.map(function(r){ return '<div class="jg"><span class="k">'+r[0]+'</span><span>'+r[1]+'</span></div>'; }).join('')+'</div>' + more +
+    '<div class="jgrid">'+gridRows.map(function(r){ return '<div class="jg"><span class="k">'+r[0]+'</span><span>'+r[1]+'</span></div>'; }).join('')+'</div>' + '<button class="jtoggle" onclick="JOURNEY_EXPLAIN=!JOURNEY_EXPLAIN;renderJourney()">'+(JOURNEY_EXPLAIN?'Hide how this is calculated':'How is this calculated?')+'</button>' + explain + more +
     '<button class="jtoggle" onclick="JOURNEY_OPEN=!JOURNEY_OPEN;renderJourney()">'+(JOURNEY_OPEN?'Hide projections':'Where will I land?')+'</button>' +
     '<div class="eta-strip"><div class="eta-block"><div class="eta-eyebrow">TARGET DATE</div><div class="eta-value target">'+new Date(J.target_date).getFullYear()+'</div></div>' +
     '<div class="eta-block"><div class="eta-eyebrow">TARGET CAGR</div><div class="eta-value">'+J.target_cagr+'%</div></div>' +
     '<div class="eta-block"><div class="eta-eyebrow">MONTHLY PLAN</div><div class="eta-value">'+maskable(fmtUsd(J.monthly_plan))+'</div></div></div></div>';
 }
-function celebrate(){
-  const colors=['#DFC15A','#4F8FE8','#35C48C','#D67AB1','#B98FE0','#E2883D'], p=[];
-  for(let i=0;i<24;i++) p.push('<div class="fs-confetti" style="left:'+Math.round(Math.random()*100)+'%;background:'+colors[i%6]+';animation-delay:'+(Math.random()*0.3).toFixed(2)+'s;animation-duration:'+(1+Math.random()*0.5).toFixed(2)+'s"></div>');
-  const el=document.createElement('div'); el.className='fullscreen-celebrate'; el.innerHTML='<div class="fs-flash"></div>'+p.join(''); document.body.appendChild(el); setTimeout(function(){ el.remove(); },1300);
+// ---------- login celebration: confetti for a milestone, fireworks for the goal; tap to skip ----------
+let CELEB_RAF = null;
+function stopCelebration(){ cancelAnimationFrame(CELEB_RAF); CELEB_RAF = null; const e=$('celeb'); if(e) e.classList.remove('on'); }
+function celebrate(kind){
+  try{ if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return; }catch(e){}
+  const root=$('celeb'), cv=$('celeb-cv'); if(!root||!cv) return;
+  const dpr=Math.min(2, window.devicePixelRatio||1), W=window.innerWidth, H=window.innerHeight;
+  cv.width=W*dpr; cv.height=H*dpr; const ctx=cv.getContext('2d'); ctx.scale(dpr,dpr);
+  const goal = kind==='goal', cols=['#DFC15A','#4F8FE8','#35C48C','#D67AB1','#B98FE0','#E2883D','#F2EFE9'];
+  $('celeb-msg').textContent = goal ? 'GOAL REACHED' : 'MILESTONE'; $('celeb-sub').textContent = goal ? 'THE FINISH LINE' : 'ANOTHER FLAG IN SIGHT';
+  root.classList.add('on');
+  const dur = goal ? 7000 : 4200, t0 = performance.now(); let last = t0, parts = [], nextShot = 0;
+  const confetti = function(n){ for(let i=0;i<n;i++) parts.push({t:'c',x:Math.random()*W,y:-20-Math.random()*H*0.6,vx:(Math.random()-0.5)*1.2,vy:2+Math.random()*3,r:Math.random()*6.28,vr:(Math.random()-0.5)*0.3,w:5+Math.random()*5,h:8+Math.random()*7,c:cols[(Math.random()*cols.length)|0],life:1}); };
+  const shot = function(){ const cx=W*(0.15+Math.random()*0.7), cy=H*(0.12+Math.random()*0.4), c=cols[(Math.random()*cols.length)|0], n=goal?70:40; for(let i=0;i<n;i++){ const a=i/n*6.283, sp=2+Math.random()*(goal?5:3); parts.push({t:'f',x:cx,y:cy,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,c:Math.random()<0.3?'#F2EFE9':c,life:1}); } };
+  confetti(goal?60:110);
+  function frame(now){
+    const dt=Math.min(40,now-last)/16.7; last=now; const el=now-t0;
+    ctx.clearRect(0,0,W,H);
+    if(goal && el<dur-1500 && now>=nextShot){ shot(); nextShot = now + 350 + Math.random()*400; if(Math.random()<0.5) confetti(12); }
+    if(!goal && el<1800 && Math.random()<0.25) confetti(4);
+    parts.forEach(function(p){
+      if(p.t==='c'){ p.x+=p.vx*dt+Math.sin(p.y/40)*0.6; p.y+=p.vy*dt; p.r+=p.vr*dt; if(el>dur-900) p.life-=0.02*dt; ctx.save(); ctx.globalAlpha=Math.max(0,p.life); ctx.translate(p.x,p.y); ctx.rotate(p.r); ctx.fillStyle=p.c; ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h); ctx.restore(); }
+      else { p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=0.06*dt; p.vx*=0.985; p.life-=0.014*dt; ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.c; ctx.beginPath(); ctx.arc(p.x,p.y,2.2,0,6.283); ctx.fill(); ctx.globalAlpha=1; }
+    });
+    parts = parts.filter(function(p){ return p.life>0 && p.y<H+40; });
+    if(el<dur) CELEB_RAF=requestAnimationFrame(frame); else stopCelebration();
+  }
+  CELEB_RAF=requestAnimationFrame(frame);
 }
 
 // ---------- mini stats + cash ----------
@@ -777,75 +819,70 @@ function renderOverview(){
   renderCharts();
 }
 
-// ---------- charts: trajectory + contribution pace ----------
-function cumulativeMoneyIn(){
-  if(!TXNS) return null;
-  const mk = function(acts, sign){
-    const pts = TXNS.filter(function(t){ return acts.indexOf(t.action)!==-1; }).sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); });
-    let cum = 0; return pts.map(function(t){ cum += sign(t) * Math.abs(num(t.base_currency_amount)); return {d:new Date(String(t.date).slice(0,10)+'T00:00:00'), v:cum}; });
-  };
-  const dep = mk(['DEPOSIT','WITHDRAWAL'], function(t){ return t.action==='DEPOSIT'?1:-1; });
-  // actual money in from the very first entry; if no deposits were logged, use the purchases themselves
-  return dep.length ? dep : mk(['BUY','SELL'], function(t){ return t.action==='BUY'?1:-1; });
+// ---------- chart: trajectory to goal, with the deposit lines ----------
+let TRAJ_SHOW = {val:true, dep:true};
+function setTrajShow(k){ TRAJ_SHOW[k] = !TRAJ_SHOW[k]; if(!TRAJ_SHOW.val && !TRAJ_SHOW.dep) TRAJ_SHOW[k===('val')?'dep':'val'] = true; renderCharts(); }
+function parseCfgDate(v){ if(!v) return null; const s=String(v).trim(); const d = /^\d{4}-\d{2}-\d{2}/.test(s) ? new Date(s.slice(0,10)+'T00:00:00') : new Date(s); return isNaN(d) ? null : d; }
+// recorded deposits (deposits minus withdrawals), cumulative, from the ledger
+function recordedDeposits(){
+  if(!TXNS) return [];
+  const pts = TXNS.filter(function(t){ return t.action==='DEPOSIT' || t.action==='WITHDRAWAL'; }).sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); });
+  return pts.map(function(t){ return {d:new Date(String(t.date).slice(0,10)+'T00:00:00'), a:(t.action==='DEPOSIT'?1:-1)*Math.abs(num(t.base_currency_amount))}; });
 }
-// Money-in line for the trajectory: the plan's monthly deposits up to the day the ledger starts, then the real deposits on top.
-function combinedMoneyIn(ser, actual){
-  if(!actual || !actual.length) return ser.map(function(p){ return {d:p.d, v:p.c}; }).filter(function(p){ return p.d<=new Date(); });
-  const cut = actual[0].d, pre = ser.filter(function(p){ return p.d<cut; }).map(function(p){ return {d:p.d, v:p.c}; });
-  const base = pre.length ? pre[pre.length-1].v : 0, out = pre.slice();
-  actual.forEach(function(p){ out.push({d:p.d, v:base+p.v}); });
+// planned deposits month by month from the targets tab
+function plannedDeposits(end){
+  const T = (TARGETS||[]).filter(function(t){ return t.effective_date; }).slice().sort(function(a,b){ return new Date(a.effective_date)-new Date(b.effective_date); });
+  if(!T.length) return [];
+  const actAt = function(d){ let a=T[0]; T.forEach(function(t){ if(new Date(t.effective_date)<=d) a=t; }); return a; };
+  const f = new Date(T[0].effective_date), out=[]; let cum=0;
+  for(let d=new Date(f.getFullYear(), f.getMonth(), 1); d<=end; d=new Date(d.getFullYear(), d.getMonth()+1, 1)){ cum += num(actAt(d).monthly_contribution_usd); out.push({d:new Date(d), v:cum}); }
+  return out;
+}
+// the actual-deposit line: the plan up to the cut-off date, then only deposits recorded from that date on
+function actualDepositLine(planned, cutoff, today){
+  const before = planned.filter(function(p){ return p.d < cutoff; }), base = before.length ? before[before.length-1].v : 0;
+  const out = before.slice(); let cum = base;
+  out.push({d:cutoff, v:base});
+  recordedDeposits().filter(function(r){ return r.d >= cutoff; }).forEach(function(r){ cum += r.a; out.push({d:r.d, v:cum}); });
   return out;
 }
 function renderCharts(){
   const box = $('charts'); if(!box || !HOME) return;
   const J = HOME.journey || {}; if(!J.plan_series || !J.plan_series.length){ box.innerHTML=''; return; }
-  const T = totals(), today = new Date(), ser = J.plan_series.map(function(p){ return {d:new Date(p.d+'T00:00:00'), v:p.v, c:p.c}; });
-  const actualM = cumulativeMoneyIn(), money = combinedMoneyIn(ser, actualM);
-  const start = (money && money.length && money[0].d < ser[0].d) ? money[0].d : ser[0].d, end = ser[ser.length-1].d, W=560, Ht=160, pad=8, pb=22, span = end-start;
+  const T = totals(), today = new Date(), ser = J.plan_series.map(function(p){ return {d:new Date(p.d+'T00:00:00'), v:p.v}; });
+  const start = ser[0].d, end = ser[ser.length-1].d, W=560, Ht=170, pad=8, pb=22, span = end-start;
   const maxV = J.goal_amount*1.05, X = function(d){ return pad + ((d-start)/span)*(W-2*pad); }, Y = function(v){ return Ht-pb-(Math.min(v,maxV)/maxV)*(Ht-pad-pb); };
   const rate = (J.rate_used_pct!=null ? J.rate_used_pct : J.target_cagr)/100, mth = Math.pow(1+rate, 1/12), proj=[{d:today, v:T.value}];
   let v = T.value, d = new Date(today.getFullYear(), today.getMonth()+1, 1);
   while(d <= end){ v = (v + (J.monthly_plan||0))*mth; proj.push({d:new Date(d), v:v}); d = new Date(d.getFullYear(), d.getMonth()+1, 1); }
+  const cutoff = parseCfgDate(CONFIG && CONFIG.cash_pool_reset_date) || today;
+  const planned = plannedDeposits(end), actual = actualDepositLine(planned, cutoff, today);
   const line = function(pts, key){ return pts.map(function(p,i){ return (i?'L':'M')+X(p.d).toFixed(1)+' '+Y(p[key]).toFixed(1); }).join(' '); };
-  const moneyPath = money && money.length ? ('M'+X(start).toFixed(1)+' '+Y(0).toFixed(1)+' '+money.map(function(p){ return 'L'+X(p.d).toFixed(1)+' '+Y(p.v).toFixed(1); }).join(' ')+' L'+X(today).toFixed(1)+' '+Y(money[money.length-1].v).toFixed(1)) : '';
   const yrs = []; for(let y=start.getFullYear(); y<=end.getFullYear(); y+=(end.getFullYear()-start.getFullYear()>12?2:1)){ const dd=new Date(y,0,1); if(dd>=start && dd<=end) yrs.push(dd); }
-  let html1 = '<div class="card"><div class="chart-title">TRAJECTORY TO GOAL</div><div class="chart-sub">Plan path, what you have put in, where you are, and where your current return takes you</div>' +
-    '<svg id="traj-svg" width="100%" height="160" viewBox="0 0 '+W+' '+Ht+'" preserveAspectRatio="none">' +
+  const chip = function(k,l){ return '<button class="chip '+(TRAJ_SHOW[k]?'on':'')+'" onclick="setTrajShow(\''+k+'\')">'+l+'</button>'; };
+  const sv = TRAJ_SHOW.val, sd = TRAJ_SHOW.dep, cutX = X(cutoff);
+  const pace = J.pace_3m_monthly!=null ? 'Last 3 months: <b>'+maskable(fmtUsd(J.pace_3m_monthly))+'</b>/mo against <b>'+maskable(fmtUsd(J.monthly_plan))+'</b> planned' : '';
+  const html = '<div class="card"><div class="chart-title">TRAJECTORY TO GOAL</div><div class="chart-sub">Value against the plan, and the money you put in against what the plan asked for</div>' +
+    '<div class="chips" style="margin:0 0 6px">'+chip('val','Value')+chip('dep','Deposits')+'</div>' +
+    '<svg id="traj-svg" width="100%" height="170" viewBox="0 0 '+W+' '+Ht+'" preserveAspectRatio="none">' +
     '<line x1="'+pad+'" y1="'+Y(J.goal_amount)+'" x2="'+(W-pad)+'" y2="'+Y(J.goal_amount)+'" stroke="#232129" stroke-dasharray="3 3"/>' +
     yrs.map(function(dd){ return '<line x1="'+X(dd)+'" y1="'+pad+'" x2="'+X(dd)+'" y2="'+(Ht-pb)+'" stroke="#1B1A20"/>'; }).join('') +
-    '<path d="'+moneyPath+'" fill="none" stroke="#5B6774" stroke-width="2"/>' +
-    '<path d="'+line(ser,'v')+'" fill="none" stroke="#C9A227" stroke-width="2" stroke-dasharray="5 3"/>' +
-    '<path d="'+line(proj,'v')+'" fill="none" stroke="#4F8FE8" stroke-width="2" stroke-dasharray="5 3"/>' +
-    '<circle cx="'+X(today)+'" cy="'+Y(T.value)+'" r="3.5" fill="#F2EFE9"/>' +
+    (cutoff>=start && cutoff<=end ? '<line x1="'+cutX+'" y1="'+pad+'" x2="'+cutX+'" y2="'+(Ht-pb)+'" stroke="#7A7886" stroke-dasharray="1 3"/><text x="'+Math.min(W-30,cutX+4)+'" y="'+(pad+8)+'" fill="#7A7886" font-size="8">cut-off</text>' : '') +
+    (sd ? '<path d="'+line(planned,'v')+'" fill="none" stroke="#7A7886" stroke-width="1.5" stroke-dasharray="4 3"/><path d="'+line(actual,'v')+'" fill="none" stroke="#35C48C" stroke-width="2"/>' : '') +
+    (sv ? '<path d="'+line(ser,'v')+'" fill="none" stroke="#C9A227" stroke-width="2" stroke-dasharray="5 3"/><path d="'+line(proj,'v')+'" fill="none" stroke="#4F8FE8" stroke-width="2" stroke-dasharray="5 3"/><circle cx="'+X(today)+'" cy="'+Y(T.value)+'" r="3.5" fill="#F2EFE9"/>' : '') +
     '<line x1="'+pad+'" y1="'+(Ht-pb)+'" x2="'+(W-pad)+'" y2="'+(Ht-pb)+'" stroke="#232129"/>' +
     yrs.map(function(dd){ return '<text x="'+Math.max(14,Math.min(W-14,X(dd)))+'" y="'+(Ht-pb+15)+'" fill="#D7D4CC" font-size="10" text-anchor="middle">'+dd.getFullYear()+'</text>'; }).join('') +
-    '</svg><div class="chart-legend"><span><span class="chart-sw" style="background:#5B6774"></span>Money in</span><span><span class="chart-sw" style="background:#C9A227"></span>Plan ('+J.target_cagr+'%/yr)</span><span><span class="chart-sw" style="background:#4F8FE8"></span>From today at '+(rate*100).toFixed(1)+'%/yr + '+maskable(fmtUsd(J.monthly_plan))+'/mo</span></div></div>';
-  $('charts').innerHTML = html1;
+    '</svg><div class="chart-legend">' +
+    (sv ? '<span><span class="chart-sw" style="background:#C9A227"></span>Plan ('+J.target_cagr+'%/yr)</span><span><span class="chart-sw" style="background:#4F8FE8"></span>From today at '+(rate*100).toFixed(1)+'%/yr + '+maskable(fmtUsd(J.monthly_plan))+'/mo</span>' : '') +
+    (sd ? '<span><span class="chart-sw" style="background:#7A7886"></span>Planned deposits</span><span><span class="chart-sw" style="background:#35C48C"></span>Actual deposits (plan before the cut-off, recorded after)</span>' : '') +
+    '</div>' + (pace ? '<div class="hint" style="margin-top:6px">'+pace+'</div>' : '') + '</div>';
+  box.innerHTML = html;
+  const near = function(arr,dt){ let best=null; arr.forEach(function(p){ if(p.d<=dt) best=p; }); return best?best.v:null; };
   attachCrosshair('traj-svg', {W:W,H:Ht,pad:pad,pb:pb, resolve:function(sx){
-    const f=(sx-pad)/(W-2*pad); if(f<0||f>1) return null; const dt=new Date(start.getTime()+f*span);
-    const near=function(arr,key){ let best=null; arr.forEach(function(p){ if(p.d<=dt) best=p; }); return best?best[key]:null; };
-    const lines=[]; const pl=near(ser,'v'); if(pl!==null) lines.push({color:'#C9A227',label:'Plan',val:fmtUsd(pl)});
-    if(dt<=today && money){ const m=near(money,'v'); lines.push({color:'#5B6774',label:'Money in',val:fmtUsd(m||0)}); }
-    else { const pj=near(proj,'v'); if(pj!==null) lines.push({color:'#4F8FE8',label:'Projected',val:fmtUsd(pj)}); }
-    return {x:sx,y:Y(pl||0),dateLabel:dt.toLocaleDateString(undefined,{month:'short',year:'numeric'}),lines:lines};
-  }});
-  // contribution pace: actual deposits vs plan contributions, up to today
-  if(!actualM || !actualM.length) return;
-  const pc0 = ser.filter(function(p){ return p.d<=today; }); if(!pc0.length) return;
-  const s2 = actualM[0].d < pc0[0].d ? actualM[0].d : pc0[0].d, pc = (actualM[0].d < pc0[0].d ? [{d:s2,c:0}] : []).concat(pc0);
-  const W2=560,H2=130,pb2=20, sp2 = Math.max(1, today-s2), tot=Math.max(pc[pc.length-1].c, actualM[actualM.length-1].v)*1.1||1;
-  const X2=function(d){ return pad+((d-s2)/sp2)*(W2-2*pad); }, Y2=function(v){ return H2-pb2-(v/tot)*(H2-pad-pb2); };
-  const actual = actualM, base0 = 0;
-  const ap = 'M'+X2(s2)+' '+Y2(0)+' '+actual.map(function(p){ return 'L'+X2(p.d)+' '+Y2(p.v-base0); }).join(' ')+' L'+X2(today)+' '+Y2(actual.length?actual[actual.length-1].v-base0:0);
-  const pp = 'M'+X2(s2)+' '+Y2(0)+' '+pc.map(function(p){ return 'L'+X2(p.d)+' '+Y2(p.c); }).join(' ');
-  $('charts').insertAdjacentHTML('beforeend', '<div class="card"><div class="chart-title">CONTRIBUTION PACE</div><div class="chart-sub">Money you actually put in vs what the plan asked for, since '+s2.toLocaleDateString(undefined,{month:'short',year:'numeric'})+'</div>' +
-    '<svg id="contrib-svg" width="100%" height="130" viewBox="0 0 '+W2+' '+H2+'" preserveAspectRatio="none"><path d="'+pp+'" fill="none" stroke="#7A7886" stroke-width="1.5" stroke-dasharray="4 3"/><path d="'+ap+'" fill="none" stroke="#35C48C" stroke-width="2"/>' +
-    '<line x1="'+pad+'" y1="'+(H2-pb2)+'" x2="'+(W2-pad)+'" y2="'+(H2-pb2)+'" stroke="#232129"/></svg>' +
-    '<div class="chart-legend"><span><span class="chart-sw" style="background:#35C48C"></span>Actual: '+maskable(fmtUsd(actual.length?actual[actual.length-1].v-base0:0))+'</span><span>Planned: '+maskable(fmtUsd(pc[pc.length-1].c))+'</span></div></div>');
-  attachCrosshair('contrib-svg', {W:W2,H:H2,pad:pad,pb:pb2, resolve:function(sx){
-    const f=(sx-pad)/(W2-2*pad); if(f<0||f>1) return null; const dt=new Date(s2.getTime()+f*sp2); let a=0,p=0;
-    actual.forEach(function(q){ if(q.d<=dt) a=q.v-base0; }); pc.forEach(function(q){ if(q.d<=dt) p=q.c; });
-    return {x:sx,y:Y2(a),dateLabel:dt.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}),lines:[{color:'#35C48C',label:'Actual',val:fmtUsd(a)},{color:'#7A7886',label:'Planned',val:fmtUsd(p)}]};
+    const f=(sx-pad)/(W-2*pad); if(f<0||f>1) return null; const dt=new Date(start.getTime()+f*span), lines=[]; let yy=0;
+    if(sv){ const pl=near(ser,dt); if(pl!==null){ lines.push({color:'#C9A227',label:'Plan',val:fmtUsd(pl)}); yy=pl; } if(dt>today){ const pj=near(proj,dt); if(pj!==null) lines.push({color:'#4F8FE8',label:'Projected',val:fmtUsd(pj)}); } }
+    if(sd){ const pd=near(planned,dt); if(pd!==null){ lines.push({color:'#7A7886',label:'Planned deposits',val:fmtUsd(pd)}); if(!sv) yy=pd; } if(dt<=today){ const ad=near(actual,dt); if(ad!==null) lines.push({color:'#35C48C',label:'Actual deposits',val:fmtUsd(ad)}); } }
+    return {x:sx,y:Y(yy),dateLabel:dt.toLocaleDateString(undefined,{month:'short',year:'numeric'}),lines:lines};
   }});
 }
 function attachCrosshair(id, cfg){
@@ -1251,6 +1288,18 @@ function wrapBusy(name){
   };
 }
 ['refreshPrices','saveManualPrice','resumeAuto','saveConviction','saveDecision','ackWarning','unackWarning','dismissInbox','startBuild','submitTxn','removeWatchlistItem','fullLoad'].forEach(wrapBusy);
+// ---------- Enter confirms an entry; Escape closes the form ----------
+document.addEventListener('keydown', function(e){
+  const t = e.target; if(!t || !t.tagName) return;
+  if(e.key==='Escape'){ const ov=$('txn-modal-overlay'); if(ov && ov.classList.contains('show')){ closeTxnModal(); } return; }
+  if(e.key!=='Enter' || e.shiftKey || e.isComposing) return;
+  if(t.tagName!=='INPUT' || t.getAttribute('list') || t.id==='lock-key-input' || ['checkbox','radio','button','submit'].indexOf(t.type)!==-1) return;
+  const ov=$('txn-modal-overlay');
+  if(ov && ov.classList.contains('show') && ov.contains(t)){ const b=$('txn-submit-btn'); if(b && !b.disabled && !b.classList.contains('busy')){ e.preventDefault(); b.click(); } return; }
+  const box = t.closest('.hcard, .card, .sheet'); if(!box) return;
+  const b = Array.prototype.find.call(box.querySelectorAll('button'), function(x){ return /save|submit|add/i.test(x.getAttribute('onclick')||'') && !x.disabled; });
+  if(b){ e.preventDefault(); b.click(); }
+});
 // ---------- Add Transaction / Watchlist modal ----------
 // Typing never rebuilds the form (only the small hint / preview areas), so the keyboard stays open.
 // Failure keeps the form open with everything typed; success closes it and says exactly what was recorded.
