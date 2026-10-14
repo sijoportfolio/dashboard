@@ -43,6 +43,7 @@ button{transition:transform .08s,filter .08s}
 .busy::after{content:'';display:inline-block;width:10px;height:10px;margin-left:6px;vertical-align:-1px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:btnspin .7s linear infinite}
 .ib.busy::after,.fab-main.busy::after,.alert-close.busy::after{position:absolute;left:50%;top:50%;margin:-8px 0 0 -8px;width:14px;height:14px;vertical-align:baseline}
 .ib.busy,.fab-main.busy{color:transparent}
+.ib.main.busy{color:transparent}
 .done-flash{animation:doneFlash .9s ease-out}
 @keyframes doneFlash{0%{background:rgba(53,196,140,.45)}100%{background:transparent}}
 /* landscape / wide screens */
@@ -62,8 +63,14 @@ button{transition:transform .08s,filter .08s}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--gray);flex:none}.dot.live{background:var(--green)}.dot.stale{background:var(--orange)}
 .ico{display:flex;gap:7px;flex:none}
 .ib{position:relative;background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:8px;width:32px;height:30px;font-size:13px;cursor:pointer}
+.ib.main{width:38px;height:34px;font-size:17px;color:#08131F;background:var(--gold);border-color:var(--gold-bright);font-weight:700;box-shadow:0 0 0 0 rgba(223,193,90,.6);animation:idleGlow 3s ease-in-out infinite}
+.ib.main.busy{animation:none;opacity:.85}.ib.main.busy::after{border-color:#08131F;border-right-color:transparent}
+@keyframes idleGlow{0%,100%{box-shadow:0 0 0 0 rgba(223,193,90,0)}50%{box-shadow:0 0 0 5px rgba(223,193,90,.22)}}
 .ib.dimmed{opacity:.3}.ib .b{position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;border-radius:8px;font-size:8px;padding:1px 4px}
 .ib.warn .b{background:var(--orange)}
+#refresh-btn{width:38px;height:34px;font-size:18px;line-height:1;color:var(--gold-bright);border-color:var(--gold);background:rgba(201,162,39,.16);box-shadow:0 0 0 1px rgba(201,162,39,.25),0 0 10px rgba(201,162,39,.25)}
+#refresh-btn .rot{display:inline-block}
+#refresh-btn.busy{color:var(--gold-bright);opacity:1}#refresh-btn.busy::after{display:none}#refresh-btn.busy .rot{animation:btnspin .8s linear infinite}
 /* journey */
 .big{font-family:var(--serif);font-size:24px;font-weight:600;margin:3px 0}
 .jsub{font-size:10px;color:var(--text-dim);line-height:1.6}
@@ -223,7 +230,7 @@ details.txn-extra summary{font-size:10px;color:var(--gold-bright);cursor:pointer
       <button class="ib dimmed warn" id="dq-btn" onclick="sh('dq')" title="Data quality">&#9888;<span class="b" id="dq-badge" style="display:none"></span></button>
       <button class="ib dimmed" id="inb-btn" onclick="sh('inb')" title="Inbox">&#128276;<span class="b" id="inb-badge" style="display:none"></span></button>
       <button class="ib" id="hide-btn" onclick="toggleValues()" title="Hide values">&#128065;</button>
-      <button class="ib owner-only" id="refresh-btn" onclick="refreshPrices()" title="Fetch fresh prices">&#8635;</button>
+      <button class="ib main owner-only" id="refresh-btn" onclick="refreshPrices()" title="Fetch fresh prices">&#8635;</button>
     </span>
   </div>
   <div id="journey"></div>
@@ -781,11 +788,19 @@ function cumulativeMoneyIn(){
   // actual money in from the very first entry; if no deposits were logged, use the purchases themselves
   return dep.length ? dep : mk(['BUY','SELL'], function(t){ return t.action==='BUY'?1:-1; });
 }
+// Money-in line for the trajectory: the plan's monthly deposits up to the day the ledger starts, then the real deposits on top.
+function combinedMoneyIn(ser, actual){
+  if(!actual || !actual.length) return ser.map(function(p){ return {d:p.d, v:p.c}; }).filter(function(p){ return p.d<=new Date(); });
+  const cut = actual[0].d, pre = ser.filter(function(p){ return p.d<cut; }).map(function(p){ return {d:p.d, v:p.c}; });
+  const base = pre.length ? pre[pre.length-1].v : 0, out = pre.slice();
+  actual.forEach(function(p){ out.push({d:p.d, v:base+p.v}); });
+  return out;
+}
 function renderCharts(){
   const box = $('charts'); if(!box || !HOME) return;
   const J = HOME.journey || {}; if(!J.plan_series || !J.plan_series.length){ box.innerHTML=''; return; }
   const T = totals(), today = new Date(), ser = J.plan_series.map(function(p){ return {d:new Date(p.d+'T00:00:00'), v:p.v, c:p.c}; });
-  const money = cumulativeMoneyIn();
+  const actualM = cumulativeMoneyIn(), money = combinedMoneyIn(ser, actualM);
   const start = (money && money.length && money[0].d < ser[0].d) ? money[0].d : ser[0].d, end = ser[ser.length-1].d, W=560, Ht=160, pad=8, pb=22, span = end-start;
   const maxV = J.goal_amount*1.05, X = function(d){ return pad + ((d-start)/span)*(W-2*pad); }, Y = function(v){ return Ht-pb-(Math.min(v,maxV)/maxV)*(Ht-pad-pb); };
   const rate = (J.rate_used_pct!=null ? J.rate_used_pct : J.target_cagr)/100, mth = Math.pow(1+rate, 1/12), proj=[{d:today, v:T.value}];
@@ -815,12 +830,12 @@ function renderCharts(){
     return {x:sx,y:Y(pl||0),dateLabel:dt.toLocaleDateString(undefined,{month:'short',year:'numeric'}),lines:lines};
   }});
   // contribution pace: actual deposits vs plan contributions, up to today
-  if(!money || !money.length) return;
+  if(!actualM || !actualM.length) return;
   const pc0 = ser.filter(function(p){ return p.d<=today; }); if(!pc0.length) return;
-  const s2 = money[0].d < pc0[0].d ? money[0].d : pc0[0].d, pc = (money[0].d < pc0[0].d ? [{d:s2,c:0}] : []).concat(pc0);
-  const W2=560,H2=130,pb2=20, sp2 = Math.max(1, today-s2), tot=Math.max(pc[pc.length-1].c, money[money.length-1].v)*1.1||1;
+  const s2 = actualM[0].d < pc0[0].d ? actualM[0].d : pc0[0].d, pc = (actualM[0].d < pc0[0].d ? [{d:s2,c:0}] : []).concat(pc0);
+  const W2=560,H2=130,pb2=20, sp2 = Math.max(1, today-s2), tot=Math.max(pc[pc.length-1].c, actualM[actualM.length-1].v)*1.1||1;
   const X2=function(d){ return pad+((d-s2)/sp2)*(W2-2*pad); }, Y2=function(v){ return H2-pb2-(v/tot)*(H2-pad-pb2); };
-  const actual = money, base0 = 0;
+  const actual = actualM, base0 = 0;
   const ap = 'M'+X2(s2)+' '+Y2(0)+' '+actual.map(function(p){ return 'L'+X2(p.d)+' '+Y2(p.v-base0); }).join(' ')+' L'+X2(today)+' '+Y2(actual.length?actual[actual.length-1].v-base0:0);
   const pp = 'M'+X2(s2)+' '+Y2(0)+' '+pc.map(function(p){ return 'L'+X2(p.d)+' '+Y2(p.c); }).join(' ');
   $('charts').insertAdjacentHTML('beforeend', '<div class="card"><div class="chart-title">CONTRIBUTION PACE</div><div class="chart-sub">Money you actually put in vs what the plan asked for, since '+s2.toLocaleDateString(undefined,{month:'short',year:'numeric'})+'</div>' +
@@ -1218,7 +1233,7 @@ function openWatchlistFromAlert(){ hideAlertBanner(); tab('wl'); }
 // ---------- tap feedback: pulse on every tap, spinner + lock while an action runs ----------
 let LAST_TAP = null, LAST_TAP_AT = 0;
 document.addEventListener('click', function(ev){
-  const b = ev.target.closest ? ev.target.closest('button,.chip,.tab,.btn') : null; if(!b || b.disabled) return;
+  const b = ev.target.closest ? ev.target.closest('button,.chip,.tab,.btn,[onclick]') : null; if(!b || b.disabled) return;
   LAST_TAP = b; LAST_TAP_AT = Date.now();
   b.classList.remove('tapped'); void b.offsetWidth; b.classList.add('tapped');
   setTimeout(function(){ b.classList.remove('tapped'); }, 550);
