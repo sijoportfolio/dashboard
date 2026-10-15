@@ -1639,15 +1639,32 @@ function closeOptModal(){ $('opt-modal-overlay').classList.remove('show'); docum
 function setOpt(k, v){ OPT_S[k] = v; OPT_S.err = ''; updateOptPreview(); }
 function setOptSel(k, v){ OPT_S[k] = v; OPT_S.err = ''; renderOptModal(); }
 
-function optFormOk(){
-  const S = OPT_S;
-  if(OPT_MODE==='open') return !!(S.account_id && S.underlying.trim() && Number(S.strike)>0 && /^\d{4}-\d{2}-\d{2}$/.test(S.expiry) && Number(S.contracts)>=1 && S.premium!=='' && Number(S.premium)>=0 && /^\d{4}-\d{2}-\d{2}$/.test(S.open_date));
-  if(OPT_MODE==='close'){ if(!/^\d{4}-\d{2}-\d{2}$/.test(S.date)) return false; if(S.outcome==='BOUGHT_BACK') return S.close_price!=='' && Number(S.close_price)>=0; return !!S.outcome; }
-  if(OPT_MODE==='mark') return S.mark!=='' && Number(S.mark)>=0;
-  return true;
+const OPT_FIELD_IDS = {account_id:'opt-acct', option_type:'opt-type', underlying:'opt-und', strike:'opt-strike', expiry:'opt-exp', contracts:'opt-con', premium:'opt-prem', fees:'opt-fee', open_date:'opt-od', exchange:'opt-ex', notes:'opt-notes', date:'opt-cd', close_price:'opt-cp', close_fees:'opt-cf', mark:'opt-mk'};
+// the fields themselves are the truth: autofill and phone date pickers can change a value without firing 'input'
+function syncOptFromDom(){
+  Object.keys(OPT_FIELD_IDS).forEach(function(k){
+    const el = $(OPT_FIELD_IDS[k]); if(!el) return;
+    OPT_S[k] = (k==='underlying') ? String(el.value).toUpperCase() : el.value;
+  });
 }
+const OPT_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+function optMissing(){
+  const S = OPT_S, m = [];
+  if(OPT_MODE==='open'){
+    if(!S.account_id) m.push('Account'); if(!String(S.underlying).trim()) m.push('Stock ticker'); if(!(Number(S.strike)>0)) m.push('Strike price');
+    if(!OPT_DATE_RE.test(S.expiry)) m.push('Expiry date'); if(!(Number(S.contracts)>=1)) m.push('Contracts');
+    if(S.premium==='' || !(Number(S.premium)>=0)) m.push('Premium per share'); if(!OPT_DATE_RE.test(S.open_date)) m.push('Sold on');
+  } else if(OPT_MODE==='close'){
+    if(!OPT_DATE_RE.test(S.date)) m.push('Date');
+    if(S.outcome==='BOUGHT_BACK' && (S.close_price==='' || !(Number(S.close_price)>=0))) m.push('Buyback price per share');
+  } else if(OPT_MODE==='mark'){ if(S.mark==='' || !(Number(S.mark)>=0)) m.push('Current option price'); }
+  return m;
+}
+function optFormOk(){ syncOptFromDom(); return optMissing().length===0; }
+document.addEventListener('input', function(e){ if(e.target && e.target.closest && e.target.closest('#opt-modal-overlay')) updateOptPreview(); }, true);
+document.addEventListener('change', function(e){ if(e.target && e.target.closest && e.target.closest('#opt-modal-overlay')) updateOptPreview(); }, true);
 function updateOptPreview(){
-  const b = $('opt-submit-btn'); if(b) b.disabled = !optFormOk() || OPT_BUSY;
+  syncOptFromDom();
   const p = $('opt-preview'); if(!p) return;
   const S = OPT_S;
   if(OPT_MODE==='open'){
@@ -1681,8 +1698,8 @@ function renderOptModal(){
   const S = OPT_S, body = $('opt-modal-body'), title = $('opt-modal-title'); let h = '';
   if(OPT_MODE==='open'){
     title.textContent = S.option_type==='CALL' ? 'Sell a covered call' : 'Sell a put';
-    h += fld('Account', '<select class="txn-select" onchange="setOptSel(\'account_id\',this.value)">'+txnAccountOptions(S.account_id)+'</select>');
-    h += fld('Type', '<select class="txn-select" onchange="setOptSel(\'option_type\',this.value)"><option value="PUT"'+(S.option_type==='PUT'?' selected':'')+'>Put (cash-secured)</option><option value="CALL"'+(S.option_type==='CALL'?' selected':'')+'>Call (covered)</option></select>');
+    h += fld('Account', '<select class="txn-select" id="opt-acct" onchange="setOptSel(\'account_id\',this.value)">'+txnAccountOptions(S.account_id)+'</select>');
+    h += fld('Type', '<select class="txn-select" id="opt-type" onchange="setOptSel(\'option_type\',this.value)"><option value="PUT"'+(S.option_type==='PUT'?' selected':'')+'>Put (cash-secured)</option><option value="CALL"'+(S.option_type==='CALL'?' selected':'')+'>Call (covered)</option></select>');
     h += fld('Stock ticker', '<input class="txn-input" id="opt-und" value="'+esc(S.underlying)+'" autocapitalize="characters" oninput="this.value=this.value.toUpperCase();setOpt(\'underlying\',this.value)" placeholder="CRWV">');
     h += fld('Strike price', optInput('opt-strike','strike','number',S.strike,'inputmode="decimal" step="any" placeholder="60"'));
     h += fld('Expiry date', optInput('opt-exp','expiry','date',S.expiry));
@@ -1721,7 +1738,10 @@ function renderOptModal(){
 }
 function optFail(msg){ OPT_BUSY = false; OPT_S.err = msg; const e = $('opt-err'); if(e){ e.textContent = msg; e.style.display = ''; } const b = $('opt-submit-btn'); if(b){ b.disabled = false; b.textContent = 'Try again'; } showToast(msg, 'error'); }
 async function submitOpt(){
-  if(OPT_BUSY || !optFormOk()) return; OPT_BUSY = true; const b = $('opt-submit-btn'); if(b){ b.disabled = true; b.textContent = 'Saving...'; }
+  if(OPT_BUSY) return;
+  syncOptFromDom(); const missing = optMissing();
+  if(missing.length){ OPT_S.err = 'Please fill in: '+missing.join(', ')+'.'; const e = $('opt-err'); if(e){ e.textContent = OPT_S.err; e.style.display = ''; } showToast(OPT_S.err,'error'); return; }
+  OPT_BUSY = true; const b = $('opt-submit-btn'); if(b){ b.disabled = true; b.textContent = 'Saving...'; }
   const S = OPT_S;
   try{
     if(OPT_MODE==='open'){
