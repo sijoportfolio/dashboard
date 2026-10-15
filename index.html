@@ -1834,7 +1834,7 @@ function freshTxnState(action){
   return { action:action, account_id:'', asset_id:'', date:localDateStr(new Date()), quantity:'', price:'', gross_amount:'', notes:'', priceAuto:false, priceHint:'', accountHint:'',
     asset_name:'', asset_class:'', exchange:'', yahoo_symbol:'', nt_sector:'', cap_seg:'', cap_usd:'', decision_id:'', editId:'', editOriginal:null,
     ticker:'', yahoo_id:'', company:'', sector:'', entry_low:'', entry_high:'', priority:'', wlHint:'',
-    tax_withheld:'', conviction:'', why:'', horizon:'', exp_cagr:'', conv_hold:false,
+    tax_withheld:'', dep_fee:'', conviction:'', why:'', horizon:'', exp_cagr:'', conv_hold:false,
     from_account:'', to_account:'', amount_sent:'', amount_received:'', fee_sent:'', recvAuto:true, rate:null, rateHint:'',
     sellWarning:null, fx:null, submitError:'', fromWl:'' };
 }
@@ -2026,6 +2026,7 @@ function txnPreviewHtml(){
   }
   const ccy=txnCcy(), g=Number(TXN_STATE.gross_amount); if(!ccy || !(g>0)) return '';
   const parts=[]; if(a==='BUY'||a==='SELL') parts.push('Trade value: <b>'+fmtMoney(g,ccy)+'</b>');
+  if(a==='DEPOSIT'){ const df=Number(TXN_STATE.dep_fee)||0; if(df>0) parts.push('Account receives <b>'+fmtMoney(Math.max(0,g-df),ccy)+'</b> after '+fmtMoney(df,ccy)+' fees'); }
   if(ccy!==baseCcy() && TXN_STATE.fx) parts.push('&asymp; '+fmtUsd(g/TXN_STATE.fx.rate)+' <b>'+baseCcy()+'</b> at '+Number(TXN_STATE.fx.rate).toFixed(2)+' '+esc(ccy)+' per '+baseCcy()+(TXN_STATE.fx.isFallback?' (nearest available rate)':''));
   return parts.length ? '<div class="txn-preview">'+parts.join(' &middot; ')+'</div>' : '';
 }
@@ -2039,7 +2040,7 @@ function updateTxnComputedArea(){
   setHtmlIfPresent('txn-preview-area', txnPreviewHtml()); setHtmlIfPresent('txn-warning-area', txnWarningHtml()); setHtmlIfPresent('txn-qty-hint', txnQtyHintHtml());
   setHtmlIfPresent('txn-price-hint', esc(TXN_STATE.priceHint)); setHtmlIfPresent('txn-amount-hint', txnAmountHintHtml()); setHtmlIfPresent('txn-account-hint', esc(TXN_STATE.accountHint));
   setHtmlIfPresent('txn-date-hint', dateHintHtml()); setHtmlIfPresent('txn-newticker-hint', newTickerHintHtml()); setHtmlIfPresent('txn-wl-hint', esc(TXN_STATE.wlHint));
-  setHtmlIfPresent('txn-tax-hint', dividendDefaultHint()); setHtmlIfPresent('txn-rate-hint', esc(TXN_STATE.rateHint));
+  setHtmlIfPresent('txn-tax-hint', dividendDefaultHint()); setHtmlIfPresent('txn-depfee-hint', ''); setHtmlIfPresent('txn-rate-hint', esc(TXN_STATE.rateHint));
   const btn=$('txn-submit-btn'); if(btn) btn.disabled = !txnCanSubmit();
 }
 function txnCanSubmit(){
@@ -2097,6 +2098,7 @@ async function submitTxn(){
       params={txn_action:a, account_id:S.account_id, asset_id:S.asset_id||'', date:S.date, quantity:S.quantity||'', price:S.price||'', gross_amount:S.gross_amount, notes:S.notes||'', decision_id:S.decision_id||'', confirmSellWarning:TXN_SELL_CONFIRMED?'true':'false'};
       if(a==='FEE') params.amount = S.gross_amount;
       if(a==='DIVIDEND') params.tax_withheld = S.tax_withheld;
+      if(a==='DEPOSIT') params.fees = S.dep_fee||'';
       if(a==='BUY'){
         if(isNewTickerNow()){
           params.asset_name=S.asset_name||S.asset_id; params.asset_class=S.asset_class||''; params.exchange=S.exchange||''; params.yahoo_symbol=S.yahoo_symbol||'';
@@ -2173,6 +2175,7 @@ function renderTxnModalBody(){
   } else {
     h += fld((a==='FEE'?'CHARGE AMOUNT':'AMOUNT')+(ccy?' ('+esc(ccy)+')':''),'<input type="number" step="any" inputmode="decimal" class="txn-input" id="txn-amount-input" value="'+esc(S.gross_amount)+'" oninput="TXN_STATE.gross_amount=this.value;onTxnNumberChange();">','txn-amount-hint');
   }
+  if(a==='DEPOSIT') h += fld('FEES (optional'+(ccy?', '+esc(ccy):'')+')','<input type="number" step="any" inputmode="decimal" class="txn-input" value="'+esc(S.dep_fee)+'" oninput="TXN_STATE.dep_fee=this.value;updateTxnComputedArea();">','txn-depfee-hint');
   if(a==='DIVIDEND') h += fld('TAX WITHHELD (optional'+(ccy?', '+esc(ccy):'')+')','<input type="number" step="any" inputmode="decimal" class="txn-input" value="'+esc(S.tax_withheld)+'" oninput="TXN_STATE.tax_withheld=this.value">','txn-tax-hint');
   h += '<div id="txn-preview-area"></div><div id="txn-warning-area"></div>';
   if(a==='BUY'){
