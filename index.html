@@ -105,6 +105,8 @@ button{transition:transform .08s,filter .08s}
 /* settings strip, local-currency tables, runner */
 .setbar{display:flex;gap:6px;flex-wrap:wrap;margin:-2px 0 10px}
 .pill{font-size:9.5px;border:1px solid var(--border);background:none;color:var(--text-dim);border-radius:14px;padding:5px 10px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.pill.working{border-color:var(--blue);color:#9CC3F5;background:rgba(79,143,232,.1);animation:workRing 1.4s ease-out infinite}.pill.working .tick{animation:btnspin .8s linear infinite}
+@keyframes workRing{0%{box-shadow:0 0 0 0 rgba(79,143,232,.65)}100%{box-shadow:0 0 0 9px rgba(79,143,232,0)}}
 .pill.on{border-color:var(--gold);color:var(--gold-bright);background:rgba(201,162,39,.1)}.pill .tick{display:inline-block;width:9px;text-align:center}
 .rt{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:6px;font-size:10px;padding:4px 0;border-bottom:1px solid var(--border-soft);align-items:baseline}
 .rt.one{grid-template-columns:1.25fr 1fr}.rt .k{color:var(--text-faint)}.rt span:not(.k){text-align:right}.rt.b{font-weight:600}.rt.head{color:var(--text-faint);font-size:9px;letter-spacing:.08em}
@@ -123,7 +125,7 @@ tr.tot td{border-top:1px solid var(--border);font-weight:600;color:var(--text)}
 .optc{padding:11px 12px}.optc .t{display:flex;justify-content:space-between;gap:8px;align-items:baseline}.optc .nm{font-weight:600;font-size:13px}
 .dte{font-size:9.5px;padding:2px 8px;border-radius:10px;border:1px solid var(--border);color:var(--text-dim);white-space:nowrap}.dte.soon{border-color:var(--orange);color:var(--orange)}
 .optc .ln{font-size:10.5px;color:var(--text-dim);margin-top:5px;line-height:1.55}.optc .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
-.runner.pace .fl{transform:scaleX(-1)}
+.runner.pace .fl,.runner.behind .fl{transform:scaleX(-1)}
 @media (prefers-reduced-motion:reduce){.runner .fi,.fire,.sweat{animation:none}}
 /* mini stats */
 .mini{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
@@ -195,7 +197,7 @@ td:first-child{white-space:normal;padding-left:0}tr.sel td{background:rgba(201,1
 .sheet{position:fixed;left:50%;bottom:0;width:min(560px,100%);z-index:1050;background:var(--surface-2);border:1px solid var(--gold);border-bottom:0;border-radius:18px 18px 0 0;padding:14px 16px 20px;transform:translate(-50%,110%);transition:transform .25s;max-height:76vh;overflow:auto;visibility:hidden}
 .sheet.open{transform:translate(-50%,0);visibility:visible}
 .sheet h4{margin:0 0 6px;font-family:var(--serif);font-size:16px}
-.x{float:right;background:none;border:0;color:var(--text-dim);cursor:pointer;font-size:16px}
+.x{float:right;background:none;border:0;color:var(--text-dim);cursor:pointer;font-size:26px;line-height:1;width:44px;height:44px;margin:-8px -8px 0 0;display:flex;align-items:center;justify-content:center}
 .it{padding:9px 0;border-top:1px solid var(--border);font-size:11px;line-height:1.5;color:var(--text-dim)}
 .it b{color:var(--text)}.it .acts{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
 .sev{font-size:8px;letter-spacing:.08em;text-transform:uppercase;padding:1px 6px;border-radius:3px;margin-right:6px}
@@ -214,7 +216,7 @@ td:first-child{white-space:normal;padding-left:0}tr.sel td{background:rgba(201,1
 body.modal-open{overflow:hidden}
 .txn-input,.txn-select,input.f,select.f,textarea.f{font-size:16px}input.f,select.f{font-size:12px}
 .txn-modal-title{font-family:var(--serif);font-size:17px;margin:0 0 14px;display:flex;justify-content:space-between;align-items:center}
-.txn-modal-close{background:none;border:0;color:var(--text-faint);font-size:22px;cursor:pointer}
+.txn-modal-close{background:none;border:0;color:var(--text-dim);font-size:32px;line-height:1;cursor:pointer;width:48px;height:48px;margin:-8px -10px -8px 0;display:flex;align-items:center;justify-content:center;flex:none}
 .txn-field{margin-bottom:12px}.txn-label{font-size:9.5px;color:var(--text-faint);letter-spacing:.05em;margin-bottom:4px;display:block}
 .txn-input,.txn-select{width:100%;font-size:12px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:9px 10px}
 .txn-input:focus,.txn-select:focus{border-color:var(--blue);outline:none}
@@ -284,6 +286,7 @@ details.txn-extra summary{font-size:10px;color:var(--gold-bright);cursor:pointer
 <button class="fab-main" id="fab-stack" onclick="sh('plus')" style="display:none">+</button>
 <div class="sheet" id="plus"><button class="x" onclick="sh('plus')">&#10005;</button><h4>Add</h4>
   <div class="it" onclick="sh('plus');openTxnModal('BUY')" style="cursor:pointer"><b>Transaction</b><br>Buy, Sell, Dividend, Deposit, Withdrawal, Transfer, Charge</div>
+  <div class="it" onclick="sh('plus');tab('opt');openOptModal('open')" style="cursor:pointer"><b>Option (put or call)</b><br>Record a cash-secured put or a covered call you sold</div>
   <div class="it" onclick="sh('plus');openTxnModal('WATCHLIST')" style="cursor:pointer"><b>Watchlist ticker</b></div>
   <div class="it" onclick="sh('plus');tab('hold');showToast('Open a holding and use Add decision on its card.','success')" style="cursor:pointer"><b>Decision for a ticker</b><br>Open the holding, then Add decision</div>
 </div>
@@ -1389,7 +1392,7 @@ function renderSetBar(){
   const el = $('setbar'); if(!el) return;
   el.innerHTML = '<button class="pill '+(includeAll?'on':'')+'" onclick="toggleIncludeAll()" title="Cash, dividends and profit from sold positions count in totals and returns"><span class="tick">'+(includeAll?'✓':'')+'</span>Cash, dividends &amp; sold profit</button>' +
     '<button class="pill '+(SHOW_FX?'on':'')+'" onclick="toggleFx()" title="Dollar gains include the currency effect. Off: dollar gains as if the exchange rate had not moved"><span class="tick">'+(SHOW_FX?'✓':'')+'</span>Currency effect</button>' +
-    '<button class="pill owner-only" onclick="recalcNow()" title="Rebuild the numbers now instead of waiting for the next scheduled update">'+(RECALC && RECALC.busy ? '<span class="tick">\u21BB</span>'+esc(RECALC.label||'Working...') : '<span class="tick">\u21BB</span>Recalculate now')+'</button>';
+    '<button class="pill owner-only'+(RECALC && RECALC.busy ? ' working' : '')+'" id="recalc-pill" onclick="recalcNow()" title="Rebuild the numbers now instead of waiting for the next scheduled update"><span class="tick">\u21BB</span><span id="recalc-lbl">'+(RECALC && RECALC.busy ? esc(RECALC.label||'Working...') : 'Recalculate now')+'</span></button>';
 }
 
 // ---- ledger pieces for one position ----
@@ -1542,7 +1545,8 @@ function renderOptions(quiet){
   const el = $('t-opt'); if(!el) return;
   if(!OPT_DATA){
     if(!OPT_LOADING && !OPT_ERR) loadOptions(true);
-    el.innerHTML = '<div class="card"><div class="lbl">Options</div><p class="hint">'+(OPT_ERR ? 'Could not load options: '+esc(OPT_ERR)+'<br><br>If the Options.gs file has not been added to Apps Script yet, add it and deploy a new version.<br><br><button class="btn" onclick="OPT_ERR=\'\';loadOptions(true)">Retry</button>' : 'Loading your options...')+'</p></div>';
+    const unknown = /unknown action/i.test(OPT_ERR);
+    el.innerHTML = '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div class="lbl">Options \u00B7 the wheel</div><button class="btn primary owner-only" onclick="openOptModal(\'open\')">+ Sell option</button></div><p class="hint" style="margin-top:10px">'+(OPT_ERR ? (unknown ? 'Your Apps Script does not have the Options code live yet. Add Options.gs, replace WebApp.gs, then Deploy \u2192 Manage deployments \u2192 pencil \u2192 New version. You can still use + Sell option once that is done.' : 'Could not load options: '+esc(OPT_ERR))+'<br><br><button class="btn" onclick="OPT_ERR=\'\';loadOptions(true)">Retry</button>' : 'Loading your options...')+'</p></div>';
     return;
   }
   if(!quiet) loadOptions(false);
@@ -1746,7 +1750,11 @@ async function submitOpt(){
 
 // ---------- Recalculate now ----------
 let RECALC = {busy:false, label:''};
-function setRecalc(label){ RECALC.label = label; renderSetBar(); }
+function setRecalc(label){
+  RECALC.label = label;
+  const pill = $('recalc-pill'), lbl = $('recalc-lbl');   // update in place so the tap animation is not wiped out
+  if(pill && lbl){ pill.classList.toggle('working', RECALC.busy); lbl.textContent = RECALC.busy ? (label || 'Working...') : 'Recalculate now'; } else renderSetBar();
+}
 async function recalcNow(){
   if(RECALC.busy || ACCESS_LEVEL==='family') return;
   RECALC.busy = true; setRecalc('Starting...');
@@ -1764,7 +1772,7 @@ async function recalcNow(){
     }
     showToast(done ? '✓ Recalculated: the dashboard is up to date.' : 'Still working in the background - it will update by itself.', done ? 'success' : 'error');
   }catch(e){ showToast('Could not recalculate - '+(e.message||e),'error'); }
-  RECALC.busy = false; RECALC.label = ''; renderSetBar();
+  RECALC.busy = false; setRecalc('');
 }
 
 // ---------- runner: tap shows the gap, double tap previews the three looks ----------
