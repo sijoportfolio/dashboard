@@ -1780,17 +1780,20 @@ async function recalcNow(){
   RECALC.busy = true; setRecalc('Starting...');
   const before = STATUS ? STATUS.built_at : null;
   try{
-    try{ await loadData('build_snapshot'); }catch(e){ if(!/busy/i.test(String(e.message))) throw e; }
-    setRecalc('Working...');
-    let done = false;
-    for(let n=0; n<80 && !done; n++){
-      await sleep(8000);
-      const j = await loadData('home'); STATUS = j.status || STATUS;
+    // fire the rebuild and do NOT wait for it (it runs for 1-3 minutes); watch the status instead
+    loadData('recalc').catch(function(e){ if(/unknown action/i.test(String(e.message))) loadData('build_snapshot').catch(function(){}); });
+    let done = false, failed = null;
+    for(let n=0; n<70 && !done && !failed; n++){
+      await sleep(4000);
+      let j; try{ j = await loadData('home'); }catch(e){ continue; }
+      STATUS = j.status || STATUS;
       const st = j.status || {};
       if(st.built_at && st.built_at!==before && !st.dirty && !st.building){ applyHome(j); cacheSet(j); renderAll(); loadParts(); loadLive(); done = true; }
+      else if(st.last_error && !st.building && n>1){ failed = st.last_error; }
       else setRecalc(st.stage ? 'Working, step '+st.stage+'...' : 'Working...');
     }
-    showToast(done ? '✓ Recalculated: the dashboard is up to date.' : 'Still working in the background - it will update by itself.', done ? 'success' : 'error');
+    if(failed) showToast('Recalculate failed: '+failed,'error');
+    else showToast(done ? '✓ Recalculated: the dashboard is up to date.' : 'Still working in the background - it will update by itself.', done ? 'success' : 'error');
   }catch(e){ showToast('Could not recalculate - '+(e.message||e),'error'); }
   RECALC.busy = false; setRecalc('');
 }
