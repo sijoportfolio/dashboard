@@ -120,6 +120,10 @@ tr.tot td{border-top:1px solid var(--border);font-weight:600;color:var(--text)}
 .sweat{position:absolute;right:-5px;top:-3px;font-size:10px;pointer-events:none;animation:drip 1.7s ease-in infinite}
 @keyframes drip{0%{transform:translateY(0);opacity:0}20%{opacity:1}100%{transform:translateY(14px);opacity:0}}
 @keyframes jog{from{transform:translateY(0)}to{transform:translateY(-2px)}}
+.optc{padding:11px 12px}.optc .t{display:flex;justify-content:space-between;gap:8px;align-items:baseline}.optc .nm{font-weight:600;font-size:13px}
+.dte{font-size:9.5px;padding:2px 8px;border-radius:10px;border:1px solid var(--border);color:var(--text-dim);white-space:nowrap}.dte.soon{border-color:var(--orange);color:var(--orange)}
+.optc .ln{font-size:10.5px;color:var(--text-dim);margin-top:5px;line-height:1.55}.optc .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.runner.pace .fl{transform:scaleX(-1)}
 @media (prefers-reduced-motion:reduce){.runner .fi,.fire,.sweat{animation:none}}
 /* mini stats */
 .mini{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
@@ -269,10 +273,11 @@ details.txn-extra summary{font-size:10px;color:var(--gold-bright);cursor:pointer
     <button class="tab on" data-t="over" onclick="tab('over')">Overview</button>
     <button class="tab" data-t="alloc" onclick="tab('alloc')">Allocate</button>
     <button class="tab" data-t="hold" onclick="tab('hold')">Holdings</button>
+    <button class="tab" data-t="opt" onclick="tab('opt')">Options</button>
     <button class="tab" data-t="closed" onclick="tab('closed')">Closed</button>
     <button class="tab" data-t="wl" onclick="tab('wl')">Watchlist</button>
   </div>
-  <div id="t-over"></div><div id="t-alloc" style="display:none"></div><div id="t-hold" style="display:none"></div><div id="t-closed" style="display:none"></div><div id="t-wl" style="display:none"></div>
+  <div id="t-over"></div><div id="t-alloc" style="display:none"></div><div id="t-hold" style="display:none"></div><div id="t-opt" style="display:none"></div><div id="t-closed" style="display:none"></div><div id="t-wl" style="display:none"></div>
   <p class="hint" style="margin-top:18px" id="foot-hint"></p>
 </div>
 
@@ -287,6 +292,9 @@ details.txn-extra summary{font-size:10px;color:var(--gold-bright);cursor:pointer
 
 <div class="txn-modal-overlay" id="txn-modal-overlay" onclick="if(event.target===this) closeTxnModal()">
   <div class="txn-modal"><div class="txn-modal-title" id="txn-modal-title"><span>Add Transaction</span><button class="txn-modal-close" onclick="closeTxnModal()">&times;</button></div><div id="txn-modal-body"></div></div>
+</div>
+<div class="txn-modal-overlay" id="opt-modal-overlay" onclick="if(event.target===this) closeOptModal()">
+  <div class="txn-modal"><div class="txn-modal-title"><span id="opt-modal-title">Sell a put</span><button class="txn-modal-close" onclick="closeOptModal()">&times;</button></div><div id="opt-modal-body"></div></div>
 </div>
 <div class="toast" id="toast"></div>
 <div class="alert-banner" id="alert-banner"><div class="alert-icon">&#127919;</div>
@@ -564,12 +572,12 @@ function lockNow(message){
 function tab(t){
   ACTIVE_TAB = t;
   document.querySelectorAll('#tabs .tab').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-t')===t); });
-  ['over','alloc','hold','closed','wl'].forEach(function(x){ $('t-'+x).style.display = x===t ? 'block' : 'none'; });
+  ['over','alloc','hold','opt','closed','wl'].forEach(function(x){ $('t-'+x).style.display = x===t ? 'block' : 'none'; });
   renderTabBody(t);
   if(t==='wl' && ACCESS_LEVEL) refreshWatchlistLive();
 }
 function renderTabBody(t){
-  if(t==='over') renderOverview(); else if(t==='alloc') renderAllocate(); else if(t==='hold') renderHoldings(); else if(t==='closed') renderClosed(); else if(t==='wl') renderWatchlist();
+  if(t==='over') renderOverview(); else if(t==='alloc') renderAllocate(); else if(t==='hold') renderHoldings(); else if(t==='opt') renderOptions(); else if(t==='closed') renderClosed(); else if(t==='wl') renderWatchlist();
 }
 function toggleFilter(dim, value){
   const i = filterChain.findIndex(function(f){ return f.dim===dim; });
@@ -662,12 +670,13 @@ function milestoneVisual(realPct, pcts){
 function runnerHtml(ahead, J, vis, burst){
   const planV = J.plan_value_today, pctGap = (planV>0 && ahead!==null) ? ahead/planV*100 : 0;
   const band = (CONFIG && isNum(CONFIG.pace_band_pct) && Number(CONFIG.pace_band_pct)>=0) ? Number(CONFIG.pace_band_pct) : 1;
-  const mood = ahead===null ? 'pace' : pctGap>band ? 'ahead' : pctGap<-band ? 'behind' : 'pace';
+  const mood = RUNNER_PREVIEW || (ahead===null ? 'pace' : pctGap>band ? 'ahead' : pctGap<-band ? 'behind' : 'pace');
+  const celeOn = !!burst || RUNNER_PREVIEW==='ahead';
   const face = mood==='ahead' ? '\uD83D\uDC0E' : mood==='behind' ? '\uD83D\uDC22' : '\uD83C\uDFC3';
-  const extra = (mood==='ahead' && burst) ? '<span class="fire f1">\uD83D\uDD25</span><span class="fire f2">\uD83D\uDD25</span>'+(pctGap>10?'<span class="fire f3">\uD83D\uDD25</span>':'') : '';
+  const extra = (mood==='ahead' && celeOn) ? '<span class="fire f1">\uD83D\uDD25</span><span class="fire f2">\uD83D\uDD25</span>'+(pctGap>10?'<span class="fire f3">\uD83D\uDD25</span>':'') : '';
   const label = ahead===null ? 'No plan yet' : (ahead>=0 ? fmtK(ahead)+' ahead of the plan path' : fmtK(-ahead)+' behind the plan path');
   const slow = mood==='behind' ? ';--slow:'+(Math.min(4.5, 2.2 + Math.abs(pctGap)/8)).toFixed(1)+'s' : '';
-  return '<div class="runner fig '+mood+(burst?' cele':'')+'" style="left:'+Math.max(2,Math.min(98,vis))+'%'+slow+'" onclick="showToast(\''+jq(valuesHidden?'Plan gap hidden':label)+'\',\'success\')" title="'+esc(valuesHidden?'':label)+'"><span class="fi"><span class="fl">'+face+'</span></span>'+extra+burst;
+  return '<div class="runner fig '+mood+(celeOn?' cele':'')+'" style="left:'+Math.max(2,Math.min(98,vis))+'%'+slow+'" onclick="runnerTap(\''+jq(valuesHidden?'Plan gap hidden':label)+'\')" title="'+esc(valuesHidden?'':label)+'"><span class="fi"><span class="fl">'+face+'</span></span>'+extra+burst;
 }
 function renderJourney(){
   const J = HOME.journey || {}, T = totals();
@@ -1354,9 +1363,11 @@ function wrapBusy(name){
 // ---------- Enter confirms an entry; Escape closes the form ----------
 document.addEventListener('keydown', function(e){
   const t = e.target; if(!t || !t.tagName) return;
-  if(e.key==='Escape'){ const ov=$('txn-modal-overlay'); if(ov && ov.classList.contains('show')){ closeTxnModal(); } return; }
+  if(e.key==='Escape'){ const ov=$('txn-modal-overlay'); if(ov && ov.classList.contains('show')){ closeTxnModal(); } const oo=$('opt-modal-overlay'); if(oo && oo.classList.contains('show')){ closeOptModal(); } return; }
   if(e.key!=='Enter' || e.shiftKey || e.isComposing) return;
   if(t.tagName!=='INPUT' || t.getAttribute('list') || t.id==='lock-key-input' || ['checkbox','radio','button','submit'].indexOf(t.type)!==-1) return;
+  const oo=$('opt-modal-overlay');
+  if(oo && oo.classList.contains('show') && oo.contains(t)){ const b=$('opt-submit-btn'); if(b && !b.disabled){ e.preventDefault(); b.click(); } return; }
   const ov=$('txn-modal-overlay');
   if(ov && ov.classList.contains('show') && ov.contains(t)){ const b=$('txn-submit-btn'); if(b && !b.disabled && !b.classList.contains('busy')){ e.preventDefault(); b.click(); } return; }
   const box = t.closest('.hcard, .card, .sheet'); if(!box) return;
@@ -1377,7 +1388,8 @@ function toggleIncludeAll(){ includeAll = !includeAll; try{ localStorage.setItem
 function renderSetBar(){
   const el = $('setbar'); if(!el) return;
   el.innerHTML = '<button class="pill '+(includeAll?'on':'')+'" onclick="toggleIncludeAll()" title="Cash, dividends and profit from sold positions count in totals and returns"><span class="tick">'+(includeAll?'✓':'')+'</span>Cash, dividends &amp; sold profit</button>' +
-    '<button class="pill '+(SHOW_FX?'on':'')+'" onclick="toggleFx()" title="Dollar gains include the currency effect. Off: dollar gains as if the exchange rate had not moved"><span class="tick">'+(SHOW_FX?'✓':'')+'</span>Currency effect</button>';
+    '<button class="pill '+(SHOW_FX?'on':'')+'" onclick="toggleFx()" title="Dollar gains include the currency effect. Off: dollar gains as if the exchange rate had not moved"><span class="tick">'+(SHOW_FX?'✓':'')+'</span>Currency effect</button>' +
+    '<button class="pill owner-only" onclick="recalcNow()" title="Rebuild the numbers now instead of waiting for the next scheduled update">'+(RECALC && RECALC.busy ? '<span class="tick">\u21BB</span>'+esc(RECALC.label||'Working...') : '<span class="tick">\u21BB</span>Recalculate now')+'</button>';
 }
 
 // ---- ledger pieces for one position ----
@@ -1478,6 +1490,299 @@ function avgPriceExFees(h){
   if(!LOTS) return null; const ls = LOTS.filter(function(l){ return l.account_id===h.account_id && l.asset_id===h.asset_id; });
   const q = ls.reduce(function(s,l){ return s+num(l.qty); },0); if(!(q>0)) return null;
   return ls.reduce(function(s,l){ return s+num(l.qty)*num(l.cost_per_unit); },0)/q;
+}
+// ---------- Options tab: cash-secured puts and covered calls (the wheel), Recalculate button, runner preview ----------
+let OPT_DATA = null, OPT_AT = 0, OPT_LOADING = false, OPT_ERR = '';
+const OPT_PX = {};                       // underlying -> {price, at}
+let OPT_MODE = '', OPT_S = {}, OPT_BUSY = false;
+
+function optMoney(v){ return fmtMoney(v, 'USD'); }
+function optSigned(v){ if(v===null||v===undefined||!isFinite(v)) return '-'; return (v>=0?'+':'-')+fmtMoney(Math.abs(v),'USD'); }
+function optTypeLabel(o){ return (o.option_type==='PUT'?'Put':'Call'); }
+function optTitle(o){ return esc(o.underlying)+' $'+(+o.strike)+' '+optTypeLabel(o)+' · '+fmtDate(o.expiry); }
+function optStatusText(s){ return ({OPEN:'Open',EXPIRED:'Expired worthless',BOUGHT_BACK:'Bought back',ASSIGNED:'Assigned',CALLED_AWAY:'Called away'})[s] || s; }
+
+async function loadOptions(force){
+  if(OPT_LOADING) return; if(!force && OPT_DATA && Date.now()-OPT_AT < 60000) return;
+  OPT_LOADING = true; OPT_ERR = '';
+  try{
+    OPT_DATA = await loadData('get_options'); OPT_AT = Date.now();
+  }catch(e){ OPT_ERR = e.message || String(e); }
+  OPT_LOADING = false;
+  if(ACTIVE_TAB==='opt') renderOptions(true);
+  fetchOptionPrices();
+}
+async function fetchOptionPrices(){
+  if(!OPT_DATA) return;
+  const need = {}; (OPT_DATA.options||[]).forEach(function(o){ if(o.status==='OPEN') need[o.underlying]=1; });
+  const jobs = Object.keys(need).filter(function(u){ return !OPT_PX[u] || Date.now()-OPT_PX[u].at > 120000; }).map(function(u){
+    return loadData('get_quote_for_form',{symbol:u}).then(function(r){ if(r && r.success) OPT_PX[u] = {price:Number(r.price), at:Date.now()}; }).catch(function(){});
+  });
+  if(!jobs.length) return;
+  await Promise.all(jobs);
+  if(ACTIVE_TAB==='opt') renderOptions(true);
+}
+
+// cash an account holds in the ledger (dollars), plus what option trades have done to it
+function optLedgerCash(acc){
+  const cb = (HOME && HOME.cash_breakdown) || []; const r = cb.find(function(x){ return x.account_id===acc; });
+  return r ? num(r.total_base) : 0;
+}
+function optCashEffect(acc){
+  let s = 0;
+  ((OPT_DATA && OPT_DATA.options) || []).forEach(function(o){
+    if(o.account_id!==acc) return;
+    s += o.premium_net;
+    if(o.status==='BOUGHT_BACK') s -= num(o.close_price)*o.units + num(o.close_fees);
+  });
+  return s;
+}
+
+function renderOptions(quiet){
+  const el = $('t-opt'); if(!el) return;
+  if(!OPT_DATA){
+    if(!OPT_LOADING && !OPT_ERR) loadOptions(true);
+    el.innerHTML = '<div class="card"><div class="lbl">Options</div><p class="hint">'+(OPT_ERR ? 'Could not load options: '+esc(OPT_ERR)+'<br><br>If the Options.gs file has not been added to Apps Script yet, add it and deploy a new version.<br><br><button class="btn" onclick="OPT_ERR=\'\';loadOptions(true)">Retry</button>' : 'Loading your options...')+'</p></div>';
+    return;
+  }
+  if(!quiet) loadOptions(false);
+  const D = OPT_DATA, S = D.summary || {}, opts = D.options || [];
+  const open = opts.filter(function(o){ return o.status==='OPEN'; }).sort(function(a,b){ return String(a.expiry).localeCompare(String(b.expiry)); });
+  const closed = opts.filter(function(o){ return o.status!=='OPEN'; }).sort(function(a,b){ return String(b.close_date||'').localeCompare(String(a.close_date||'')); });
+  // cash picture for the accounts that have options
+  const accs = {}; opts.forEach(function(o){ accs[o.account_id]=1; });
+  let ledger = 0, effect = 0; Object.keys(accs).forEach(function(a){ ledger += optLedgerCash(a); effect += optCashEffect(a); });
+  const free = ledger + effect - num(S.reserved_total);
+  let h = '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div class="lbl">Options · the wheel</div><button class="btn primary owner-only" onclick="openOptModal(\'open\')">+ Sell option</button></div>' +
+    '<div class="mini" style="margin:10px 0 6px"><div class="card"><div class="lbl">Cash reserved</div><div class="v">'+maskable(fmtK(num(S.reserved_total)))+'</div></div>' +
+    '<div class="card"><div class="lbl">Est. free cash</div><div class="v '+cls(free)+'">'+maskable(fmtK(free))+'</div></div>' +
+    '<div class="card"><div class="lbl">Premium, open</div><div class="v">'+maskable(fmtK(num(S.premium_open)))+'</div></div>' +
+    '<div class="card"><div class="lbl">Premium, closed</div><div class="v '+cls(num(S.premium_realised))+'">'+maskable(fmtK(num(S.premium_realised)))+'</div></div></div>' +
+    '<div class="hint">Premium is shown after the commission. Est. free cash = the cash your ledger shows + premium received &minus; cash reserved against open puts. These figures are not yet added into your portfolio value or returns on the main screen.</div></div>';
+
+  h += '<div class="lbl" style="margin:12px 2px 6px">Open positions ('+open.length+')</div>';
+  if(!open.length) h += '<div class="card"><p class="hint" style="margin:0">Nothing open. Tap <b>+ Sell option</b> to record a put or a covered call.</p></div>';
+  open.forEach(function(o){ h += optCardHtml(o); });
+
+  const wheels = (D.wheels||[]).filter(function(w){ return w.shares>0 || w.legs>1; });
+  if(wheels.length){
+    h += '<div class="lbl" style="margin:14px 2px 6px">Wheels</div>';
+    wheels.forEach(function(w){
+      const holding = w.shares>0 && !w.called_away;
+      h += '<div class="card"><div style="display:flex;justify-content:space-between;gap:8px"><b>'+esc(w.underlying)+'</b><span class="hint">'+esc(w.wheel_id)+' · '+w.legs+' leg(s)'+(w.called_away?' · completed':'')+'</span></div>' +
+        '<div class="hint" style="margin-top:4px">Premium kept: <b class="'+cls(w.premium_net)+'">'+maskable(optMoney(w.premium_net))+'</b>' +
+        (w.shares>0 ? ' · shares assigned: '+w.shares+' at avg $'+w.avg_strike+' · <b>effective cost $'+(+w.effective_cost_per_share).toFixed(2)+'/share</b> after premium' : '')+'</div>' +
+        (holding && !w.open_legs ? '<div class="acts" style="display:flex;gap:6px;margin-top:8px"><button class="btn owner-only" onclick="openOptModal(\'open\',{option_type:\'CALL\',underlying:\''+jq(w.underlying)+'\',account_id:\''+jq(w.account_id)+'\',wheel_id:\''+jq(w.wheel_id)+'\',contracts:'+Math.max(1,Math.floor(w.shares/100))+'})">Sell a covered call</button></div>' : '') + '</div>';
+    });
+  }
+
+  if(closed.length){
+    h += '<div class="lbl" style="margin:14px 2px 6px">History</div><div class="card" style="padding:4px 12px">';
+    closed.forEach(function(o){
+      h += '<div class="rt" style="grid-template-columns:1.6fr 1fr;padding:7px 0"><span class="k" style="color:var(--text-dim)">'+optTitle(o)+'<br><small class="hint">'+optStatusText(o.status)+' · '+fmtDate(o.close_date)+(o.assigned_txn_id?' · '+esc(o.assigned_txn_id):'')+'</small></span>' +
+        '<span class="'+cls(o.realised)+'">'+maskable(optSigned(o.realised))+'<br><small class="hint">premium result</small></span></div>';
+    });
+    h += '</div>';
+  }
+  el.innerHTML = h;
+}
+
+function optCardHtml(o){
+  const px = OPT_PX[o.underlying] ? OPT_PX[o.underlying].price : null;
+  const d = o.days_to_expiry;
+  const dteCls = (d!==null && d<=7) ? 'dte soon' : 'dte';
+  const dteTxt = d===null ? '' : d<0 ? 'expired '+(-d)+'d ago' : d===0 ? 'expires today' : d+' day'+(d===1?'':'s')+' left';
+  let pos = '';
+  if(px!==null){
+    const isPut = o.option_type==='PUT';
+    const away = isPut ? (px-o.strike)/px*100 : (o.strike-px)/px*100;       // positive = safe side
+    pos = 'Stock $'+px.toFixed(2)+' · ' + (away>=0 ? '<span class="pos">'+away.toFixed(1)+'% '+(isPut?'above':'below')+' the strike</span>' : '<span class="neg">in the money by '+(-away).toFixed(1)+'%</span>');
+  } else pos = '<span class="hint">Fetching the stock price...</span>';
+  const mark = (o.mark_price!==null && o.mark_price!==undefined)
+    ? '<br>Option price you entered: $'+(+o.mark_price).toFixed(2)+(o.mark_date?' ('+fmtDate(o.mark_date)+')':'')+' → <b class="'+cls(o.unrealised)+'">'+maskable(optSigned(o.unrealised))+'</b> now (after the commission)' : '';
+  const ann = (o.annualised_pct!==null && o.annualised_pct!==undefined) ? ' · '+o.return_pct_on_reserved+'% on the cash reserved, about '+o.annualised_pct+'% a year' : '';
+  const id = jq(o.option_id);
+  const endBtn = o.option_type==='PUT' ? '<button class="btn owner-only" onclick="openOptModal(\'close\',{option_id:\''+id+'\',outcome:\'ASSIGNED\'})">Assigned</button>' : '<button class="btn owner-only" onclick="openOptModal(\'close\',{option_id:\''+id+'\',outcome:\'CALLED_AWAY\'})">Called away</button>';
+  return '<div class="hcard"><div class="optc"><div class="t"><span class="nm">'+optTitle(o)+'</span><span class="'+dteCls+'">'+dteTxt+'</span></div>' +
+    '<div class="ln">'+o.contracts+' contract'+(o.contracts>1?'s':'')+' sold at $'+(+o.premium_per_share).toFixed(2)+' on '+fmtDate(o.open_date)+' · premium <b>'+maskable(optMoney(o.premium_net))+'</b> after commission' +
+    (o.cash_reserved ? ' · cash reserved '+maskable(optMoney(o.cash_reserved)) : '') + '</div>' +
+    '<div class="ln">'+pos+' · breakeven $'+(+o.breakeven).toFixed(2)+'</div>' +
+    '<div class="ln">If it expires worthless you keep <b class="pos">'+maskable(optMoney(o.premium_net))+'</b>'+ann+mark+'</div>' +
+    '<div class="acts"><button class="btn owner-only" onclick="openOptModal(\'mark\',{option_id:\''+id+'\'})">Update price</button><button class="btn owner-only" onclick="openOptModal(\'close\',{option_id:\''+id+'\',outcome:\'EXPIRED\'})">Expired</button><button class="btn owner-only" onclick="openOptModal(\'close\',{option_id:\''+id+'\',outcome:\'BOUGHT_BACK\'})">Bought back</button>'+endBtn+'<button class="btn owner-only" style="color:var(--text-faint)" onclick="openOptModal(\'void\',{option_id:\''+id+'\'})">Entered by mistake</button></div></div></div>';
+}
+
+// ---------- the form / dialogs (one overlay, four modes) ----------
+function optFind(id){ return ((OPT_DATA && OPT_DATA.options) || []).find(function(o){ return o.option_id===id; }); }
+function defaultOptAccount(){
+  const a = ACCOUNTS.find(function(x){ return /ibkr|interactive/i.test(String(x.broker)+String(x.account_id)); }) || ACCOUNTS[0];
+  return a ? a.account_id : '';
+}
+function openOptModal(mode, preset){
+  if(ACCESS_LEVEL==='family') return;
+  preset = preset || {}; OPT_MODE = mode; OPT_BUSY = false;
+  const today = localDateStr(new Date());
+  OPT_S = { account_id: preset.account_id || defaultOptAccount(), option_type: preset.option_type || 'PUT', underlying: preset.underlying || '', strike:'', expiry:'', contracts: preset.contracts ? String(preset.contracts) : '1',
+    premium:'', fees:'', open_date: today, exchange:'NASDAQ', notes:'', wheel_id: preset.wheel_id || '',
+    option_id: preset.option_id || '', outcome: preset.outcome || '', date: today, close_price:'', close_fees:'', mark:'', err:'' };
+  if(mode==='close'){
+    const o = optFind(OPT_S.option_id);
+    if(o && (OPT_S.outcome==='EXPIRED' || OPT_S.outcome==='ASSIGNED' || OPT_S.outcome==='CALLED_AWAY') && o.expiry && o.expiry <= today) OPT_S.date = o.expiry;
+  }
+  $('opt-modal-overlay').classList.add('show'); document.body.classList.add('modal-open'); window.scrollTo(0,0);
+  renderOptModal();
+}
+function closeOptModal(){ $('opt-modal-overlay').classList.remove('show'); document.body.classList.remove('modal-open'); }
+function setOpt(k, v){ OPT_S[k] = v; OPT_S.err = ''; updateOptPreview(); }
+function setOptSel(k, v){ OPT_S[k] = v; OPT_S.err = ''; renderOptModal(); }
+
+function optFormOk(){
+  const S = OPT_S;
+  if(OPT_MODE==='open') return !!(S.account_id && S.underlying.trim() && Number(S.strike)>0 && /^\d{4}-\d{2}-\d{2}$/.test(S.expiry) && Number(S.contracts)>=1 && S.premium!=='' && Number(S.premium)>=0 && /^\d{4}-\d{2}-\d{2}$/.test(S.open_date));
+  if(OPT_MODE==='close'){ if(!/^\d{4}-\d{2}-\d{2}$/.test(S.date)) return false; if(S.outcome==='BOUGHT_BACK') return S.close_price!=='' && Number(S.close_price)>=0; return !!S.outcome; }
+  if(OPT_MODE==='mark') return S.mark!=='' && Number(S.mark)>=0;
+  return true;
+}
+function updateOptPreview(){
+  const b = $('opt-submit-btn'); if(b) b.disabled = !optFormOk() || OPT_BUSY;
+  const p = $('opt-preview'); if(!p) return;
+  const S = OPT_S;
+  if(OPT_MODE==='open'){
+    const c = Math.max(0, Math.round(Number(S.contracts)||0)), k = Number(S.strike)||0, pr = Number(S.premium)||0, f = Number(S.fees)||0, u = c*100;
+    if(!c || !k){ p.innerHTML = ''; return; }
+    const net = pr*u - f, be = S.option_type==='PUT' ? k - pr : k + pr;
+    let t = 'Premium '+optMoney(pr*u)+' → <b>'+optMoney(net)+'</b> after commission · breakeven $'+be.toFixed(2);
+    if(S.option_type==='PUT') t += '<br>Cash reserved: <b>'+optMoney(k*u)+'</b>';
+    if(S.option_type==='PUT' && /^\d{4}-\d{2}-\d{2}$/.test(S.expiry) && /^\d{4}-\d{2}-\d{2}$/.test(S.open_date)){
+      const days = Math.max(1, Math.round((new Date(S.expiry+'T00:00:00')-new Date(S.open_date+'T00:00:00'))/86400000));
+      t += '<br>If it expires worthless: '+(net/(k*u)*100).toFixed(2)+'% on the cash reserved, about '+(net/(k*u)*100*365/days).toFixed(1)+'% a year';
+    }
+    p.innerHTML = t;
+  } else if(OPT_MODE==='close'){
+    const o = optFind(S.option_id); if(!o){ p.innerHTML=''; return; }
+    const u = o.units;
+    if(S.outcome==='BOUGHT_BACK'){
+      const cp = Number(S.close_price)||0, cf = Number(S.close_fees)||0; const res = o.premium_net - cp*u - cf;
+      p.innerHTML = 'Result on this trade: <b class="'+cls(res)+'">'+optSigned(res)+'</b> (premium after commission minus the buyback and its commission)';
+    } else if(S.outcome==='EXPIRED'){ p.innerHTML = 'You keep the premium: <b class="pos">'+optMoney(o.premium_net)+'</b>. No share trade.'; }
+    else if(S.outcome==='ASSIGNED'){ p.innerHTML = 'A <b>BUY of '+u+' '+esc(o.underlying)+' at $'+o.strike+'</b> ('+optMoney(o.strike*u)+') will be added to '+esc(o.account_id)+' in Holdings. Your premium lowers your effective cost to about <b>$'+(o.strike - o.premium_net/u).toFixed(2)+'</b> per share (shown in the Wheels list).'; }
+    else if(S.outcome==='CALLED_AWAY'){ p.innerHTML = 'A <b>SELL of '+u+' '+esc(o.underlying)+' at $'+o.strike+'</b> will be added to '+esc(o.account_id)+'. Your premium is kept.'; }
+  } else if(OPT_MODE==='mark'){
+    const o = optFind(S.option_id); if(!o){ p.innerHTML=''; return; }
+    const m = Number(S.mark)||0; const un = o.premium_net - m*o.units;
+    p.innerHTML = S.mark==='' ? '' : 'Unrealised on this trade: <b class="'+cls(un)+'">'+optSigned(un)+'</b> (after the opening commission)';
+  }
+}
+function optInput(id, k, type, val, extra){ return '<input class="txn-input" id="'+id+'" type="'+type+'" value="'+esc(val)+'" oninput="setOpt(\''+k+'\',this.value)" '+(extra||'')+'>'; }
+function renderOptModal(){
+  const S = OPT_S, body = $('opt-modal-body'), title = $('opt-modal-title'); let h = '';
+  if(OPT_MODE==='open'){
+    title.textContent = S.option_type==='CALL' ? 'Sell a covered call' : 'Sell a put';
+    h += fld('Account', '<select class="txn-select" onchange="setOptSel(\'account_id\',this.value)">'+txnAccountOptions(S.account_id)+'</select>');
+    h += fld('Type', '<select class="txn-select" onchange="setOptSel(\'option_type\',this.value)"><option value="PUT"'+(S.option_type==='PUT'?' selected':'')+'>Put (cash-secured)</option><option value="CALL"'+(S.option_type==='CALL'?' selected':'')+'>Call (covered)</option></select>');
+    h += fld('Stock ticker', '<input class="txn-input" id="opt-und" value="'+esc(S.underlying)+'" autocapitalize="characters" oninput="this.value=this.value.toUpperCase();setOpt(\'underlying\',this.value)" placeholder="CRWV">');
+    h += fld('Strike price', optInput('opt-strike','strike','number',S.strike,'inputmode="decimal" step="any" placeholder="60"'));
+    h += fld('Expiry date', optInput('opt-exp','expiry','date',S.expiry));
+    h += fld('Contracts (100 shares each)', optInput('opt-con','contracts','number',S.contracts,'inputmode="numeric" step="1" min="1"'));
+    h += fld('Premium per share you received', optInput('opt-prem','premium','number',S.premium,'inputmode="decimal" step="any" placeholder="4.99"'));
+    h += fld('Commission for opening (total)', optInput('opt-fee','fees','number',S.fees,'inputmode="decimal" step="any" placeholder="1.56"'));
+    h += fld('Sold on', optInput('opt-od','open_date','date',S.open_date));
+    if(S.option_type==='PUT') h += fld('Exchange (only used if you are assigned a stock you do not hold yet)', optInput('opt-ex','exchange','text',S.exchange,'list="opt-exlist"')+'<datalist id="opt-exlist"><option value="NASDAQ"><option value="NYSE"><option value="NYSEARCA"></datalist>');
+    h += fld('Notes (optional)', optInput('opt-notes','notes','text',S.notes,''));
+    h += '<div class="txn-preview" id="opt-preview"></div>';
+  } else if(OPT_MODE==='close'){
+    const o = optFind(S.option_id); if(!o){ body.innerHTML = '<p class="hint">Position not found.</p>'; return; }
+    const names = {EXPIRED:'Expired worthless', BOUGHT_BACK:'Bought back', ASSIGNED:'Put assigned', CALLED_AWAY:'Call, shares called away'};
+    title.textContent = names[S.outcome] || 'Close position';
+    h += '<p class="hint" style="margin:0 0 10px"><b>'+optTitle(o)+'</b> · '+o.contracts+' contract(s) · '+esc(o.account_id)+'</p>';
+    h += fld(S.outcome==='BOUGHT_BACK' ? 'Date bought back' : S.outcome==='EXPIRED' ? 'Expiry date' : 'Date', optInput('opt-cd','date','date',S.date));
+    if(S.outcome==='BOUGHT_BACK'){
+      h += fld('Price per share you paid to buy it back', optInput('opt-cp','close_price','number',S.close_price,'inputmode="decimal" step="any" placeholder="1.20"'));
+      h += fld('Commission for buying back (total)', optInput('opt-cf','close_fees','number',S.close_fees,'inputmode="decimal" step="any" placeholder="1.00"'));
+    }
+    h += '<div class="txn-preview" id="opt-preview"></div>';
+  } else if(OPT_MODE==='mark'){
+    const o = optFind(S.option_id); if(!o){ body.innerHTML = '<p class="hint">Position not found.</p>'; return; }
+    title.textContent = 'Update option price';
+    h += '<p class="hint" style="margin:0 0 10px"><b>'+optTitle(o)+'</b>. Type its current price per share from your broker. It only feeds the unrealised figure on this tab.</p>';
+    h += fld('Current option price per share', optInput('opt-mk','mark','number',S.mark,'inputmode="decimal" step="any" placeholder="6.06"'));
+    h += '<div class="txn-preview" id="opt-preview"></div>';
+  } else if(OPT_MODE==='void'){
+    const o = optFind(S.option_id); title.textContent = 'Entered by mistake?';
+    h += '<p class="hint" style="margin:0 0 12px">This removes <b>'+(o?optTitle(o):'')+'</b> from your totals. The row stays in the options tab marked VOID. Use it only for a position you recorded in error. It does not undo a share trade.</p>';
+  }
+  h += '<div class="txn-error" id="opt-err" style="'+(S.err?'':'display:none')+'">'+esc(S.err)+'</div>';
+  const label = OPT_MODE==='open' ? 'Save position' : OPT_MODE==='close' ? 'Save' : OPT_MODE==='mark' ? 'Save price' : 'Yes, remove it';
+  h += '<button class="txn-submit-btn" id="opt-submit-btn" onclick="submitOpt()">'+label+'</button>';
+  body.innerHTML = h; updateOptPreview();
+}
+function optFail(msg){ OPT_BUSY = false; OPT_S.err = msg; const e = $('opt-err'); if(e){ e.textContent = msg; e.style.display = ''; } const b = $('opt-submit-btn'); if(b){ b.disabled = false; b.textContent = 'Try again'; } showToast(msg, 'error'); }
+async function submitOpt(){
+  if(OPT_BUSY || !optFormOk()) return; OPT_BUSY = true; const b = $('opt-submit-btn'); if(b){ b.disabled = true; b.textContent = 'Saving...'; }
+  const S = OPT_S;
+  try{
+    if(OPT_MODE==='open'){
+      const r = await loadData('open_option', {account_id:S.account_id, option_type:S.option_type, underlying:S.underlying.trim().toUpperCase(), strike:S.strike, expiry:S.expiry, contracts:S.contracts, premium_per_share:S.premium, open_fees:S.fees||'0', open_date:S.open_date, exchange:S.exchange||'', notes:S.notes||'', wheel_id:S.wheel_id||''});
+      if(!r.success){ optFail(r.error||'Could not save.'); return; }
+      closeOptModal(); showToast('✓ '+(r.message||'Option recorded'),'success');
+    } else if(OPT_MODE==='close'){
+      const p = {option_id:S.option_id, outcome:S.outcome, close_date:S.date};
+      if(S.outcome==='BOUGHT_BACK'){ p.close_price = S.close_price; p.close_fees = S.close_fees||'0'; }
+      const r = await loadData('close_option', p);
+      if(!r.success){ optFail(r.error||r.warning||'Could not save.'); return; }
+      closeOptModal(); showToast('✓ '+(r.message||'Saved'),'success');
+      if(r.ledger){ await fullLoad(); watchForRebuild(); }
+    } else if(OPT_MODE==='mark'){
+      const r = await loadData('update_option_mark', {option_id:S.option_id, mark_price:S.mark});
+      if(!r.success){ optFail(r.error||'Could not save.'); return; }
+      closeOptModal(); showToast('✓ Option price saved','success');
+    } else if(OPT_MODE==='void'){
+      const r = await loadData('void_option', {option_id:S.option_id});
+      if(!r.success){ optFail(r.error||'Could not save.'); return; }
+      closeOptModal(); showToast('✓ Removed from your options','success');
+    }
+    OPT_BUSY = false; await loadOptions(true);
+  }catch(err){ optFail(err.message || String(err)); }
+}
+
+// ---------- Recalculate now ----------
+let RECALC = {busy:false, label:''};
+function setRecalc(label){ RECALC.label = label; renderSetBar(); }
+async function recalcNow(){
+  if(RECALC.busy || ACCESS_LEVEL==='family') return;
+  RECALC.busy = true; setRecalc('Starting...');
+  const before = STATUS ? STATUS.built_at : null;
+  try{
+    try{ await loadData('build_snapshot'); }catch(e){ if(!/busy/i.test(String(e.message))) throw e; }
+    setRecalc('Working...');
+    let done = false;
+    for(let n=0; n<80 && !done; n++){
+      await sleep(8000);
+      const j = await loadData('home'); STATUS = j.status || STATUS;
+      const st = j.status || {};
+      if(st.built_at && st.built_at!==before && !st.dirty && !st.building){ applyHome(j); cacheSet(j); renderAll(); loadParts(); loadLive(); done = true; }
+      else setRecalc(st.stage ? 'Working, step '+st.stage+'...' : 'Working...');
+    }
+    showToast(done ? '✓ Recalculated: the dashboard is up to date.' : 'Still working in the background - it will update by itself.', done ? 'success' : 'error');
+  }catch(e){ showToast('Could not recalculate - '+(e.message||e),'error'); }
+  RECALC.busy = false; RECALC.label = ''; renderSetBar();
+}
+
+// ---------- runner: tap shows the gap, double tap previews the three looks ----------
+let RUNNER_PREVIEW = null, RUNNER_PREV_TIMER = null, LAST_RUNNER_TAP = 0;
+function runnerTap(label){
+  const n = Date.now();
+  if(n - LAST_RUNNER_TAP < 450){ LAST_RUNNER_TAP = 0; previewRunner(); return; }
+  LAST_RUNNER_TAP = n; showToast(label, 'success');
+}
+function previewRunner(){
+  const seq = ['ahead','pace','behind'], names = {ahead:'Ahead of plan: the horse', pace:'On pace: the jogger', behind:'Behind plan: the turtle'};
+  let i = 0; clearTimeout(RUNNER_PREV_TIMER);
+  const step = function(){
+    if(i >= seq.length){ RUNNER_PREVIEW = null; renderJourney(); showToast('Preview finished. Your real position is back.','success'); return; }
+    RUNNER_PREVIEW = seq[i++]; renderJourney(); showToast('Preview only, nothing is saved. '+names[RUNNER_PREVIEW],'success');
+    RUNNER_PREV_TIMER = setTimeout(step, 2400);
+  };
+  step();
 }
 // ---------- Add Transaction / Watchlist modal ----------
 // Typing never rebuilds the form (only the small hint / preview areas), so the keyboard stays open.
